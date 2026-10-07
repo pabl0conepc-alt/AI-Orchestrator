@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0e17" />
+  <title>AI Orchestrator — Plataforma de IA para Programação</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand"><span class="logo">◈</span><div><b>AI ORCHESTRATOR</b><small>coding intelligence platform</small></div></div>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="chat"><i>💬</i><span>Chat</span></button>
+        <button class="nav-item" data-view="hive"><i>🧠</i><span>Hive Mind</span></button>
+        <button class="nav-item" data-view="files"><i>🗂</i><span>Arquivos</span></button>
+        <button class="nav-item" data-view="terminal"><i>⌨</i><span>Terminal</span></button>
+        <button class="nav-item" data-view="git"><i>⑂</i><span>Git</span></button>
+        <button class="nav-item" data-view="providers"><i>🔌</i><span>Providers</span></button>
+        <button class="nav-item" data-view="runs"><i>🗃</i><span>Execuções</span></button>
+        <button class="nav-item" data-view="settings"><i>⚙</i><span>Config</span></button>
+      </nav>
+      <div class="rail-bottom">
+        <div class="health-mini">
+          <span class="dot" id="statusDot"></span><span id="statusText">conectando…</span>
+        </div>
+        <div class="ws-mini" id="wsPath">—</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="tb-left">
+          <h1 id="viewTitle">Chat</h1>
+          <span class="chip" id="projectChip">analisando projeto…</span>
+        </div>
+        <div class="tb-right">
+          <label class="field"><span>Modo</span>
+            <select id="modeSelect">
+              <option value="normal">Normal</option>
+              <option value="fallback">Fallback</option>
+              <option value="auto">Auto</option>
+              <option value="multi-agent">Multi-Agent</option>
+              <option value="hive" selected>Hive Mind</option>
+              <option value="build">Build</option>
+              <option value="debug">Debug</option>
+              <option value="review">Review</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label class="field"><span>Provider</span><select id="providerSelect"></select></label>
+          <label class="field wide"><span>Modelo</span><input id="modelInput" placeholder="auto / provider:model" /></label>
+          <button id="codeToggle" class="toggle on" title="Inteligência focada em código">CODE</button>
+        </div>
+      </header>
+
+      <!-- CHAT -->
+      <section class="view active" id="view-chat">
+        <div class="chat" id="chat"></div>
+        <div class="composer-wrap">
+          <div class="composer-hints">
+            <span id="modeHint">Modo Hive: o Master planeja e os agentes trabalham em conjunto.</span>
+          </div>
+          <form class="composer" id="composer">
+            <textarea id="input" rows="1" placeholder="Descreva a tarefa. Ex.: Crie um sistema de autenticação completo para este projeto."></textarea>
+            <button class="send" type="submit" title="Enviar">➤</button>
+          </form>
+          <div class="hint">Enter envia • Shift+Enter quebra linha • Workspace local + providers roteados</div>
+        </div>
+      </section>
+
+      <!-- HIVE -->
+      <section class="view" id="view-hive">
+        <div class="hive-layout">
+          <div class="panel">
+            <div class="panel-head"><h2>Agentes</h2><span class="chip" id="hiveDiversity">—</span></div>
+            <div id="agentGrid" class="agent-grid"><div class="empty">Nenhuma execução ainda. Envie uma tarefa no chat no modo Hive/Build.</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Timeline de atividade</h2><button class="mini" id="clearTimeline">limpar</button></div>
+            <div id="timeline" class="timeline"><div class="empty">Eventos do sistema aparecerão aqui.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FILES -->
+      <section class="view" id="view-files">
+        <div class="files-layout">
+          <div class="panel file-tree-panel">
+            <div class="panel-head"><h2>Workspace</h2><button class="mini" id="refreshFiles">atualizar</button></div>
+            <div id="fileTree" class="file-tree"></div>
+          </div>
+          <div class="panel editor-panel">
+            <div class="panel-head"><h2 id="editorPath">Nenhum arquivo aberto</h2><div><button class="mini" id="saveFile">salvar</button></div></div>
+            <textarea id="editor" class="editor" spellcheck="false" placeholder="Selecione um arquivo para visualizar/editar"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- TERMINAL -->
+      <section class="view" id="view-terminal">
+        <div class="panel terminal-panel">
+          <div class="panel-head"><h2>Terminal controlado</h2><span class="chip">allowlist • sem shell</span></div>
+          <pre id="termOut" class="terminal">$ pronto. Comandos permitidos: node, npm, git, rg, python3, ls, cat…</pre>
+          <form id="termForm" class="term-input"><span class="prompt">$</span><input id="termCmd" placeholder="npm test" autocomplete="off" /><button type="submit">executar</button></form>
+        </div>
+      </section>
+
+      <!-- GIT -->
+      <section class="view" id="view-git">
+        <div class="panel">
+          <div class="panel-head"><h2>Git</h2></div>
+          <div class="btn-row">
+            <button class="mini" data-git="git_status">status</button>
+            <button class="mini" data-git="git_diff">diff</button>
+            <button class="mini" data-git="git_log">log</button>
+            <button class="mini" data-git="git_branches">branches</button>
+            <button class="mini" data-git="git_stash_list">stash</button>
+          </div>
+          <pre id="gitOut" class="terminal">Escolha uma operação.</pre>
+        </div>
+      </section>
+
+      <!-- PROVIDERS -->
+      <section class="view" id="view-providers">
+        <div class="panel">
+          <div class="panel-head"><h2>Provider Manager</h2><span class="chip" id="providerCount">—</span></div>
+          <div id="providerGrid" class="provider-grid"></div>
+        </div>
+      </section>
+
+      <!-- RUNS -->
+      <section class="view" id="view-runs">
+        <div class="panel">
+          <div class="panel-head"><h2>Execuções (memória de tarefas)</h2><button class="mini" id="refreshRuns">atualizar</button></div>
+          <div id="runsList" class="runs-list"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="hive-layout">
+          <div class="panel">
+            <div class="panel-head"><h2>Permissões de ferramentas</h2></div>
+            <div id="permList" class="perm-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Capability Matrix</h2></div>
+            <div id="matrixWrap" class="matrix-wrap"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

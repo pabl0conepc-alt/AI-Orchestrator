@@ -1,0 +1,8 @@
+node_modules/
+.vly-run/
+.env
+.env.local
+*.log
+.DS_Store
+data/*.json
+data/workspaces/
