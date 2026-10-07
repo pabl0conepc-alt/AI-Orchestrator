@@ -54,8 +54,10 @@ export async function runHive({ request, project, catalog, mode = 'hive', prefer
   const runOne = async (task) => {
     const models = [];
     if (assignment[task.id]) models.push(assignment[task.id]);
-    const [fallback] = await selectDiverse(catalog, 1, TASK_PROFILES[task.role] || TASK_PROFILES.general, { preferFree });
-    if (fallback && (!models[0] || fallback.key !== models[0].key)) models.push(fallback);
+    // Fallback real: escolhe um candidato DIFERENTE do modelo primário da tarefa.
+    const candidates = await selectDiverse(catalog, models.length + 1, TASK_PROFILES[task.role] || TASK_PROFILES.general, { preferFree });
+    const fallback = candidates.find((c) => !models[0] || c.key !== models[0].key);
+    if (fallback) models.push(fallback);
 
     const deps = task.dependsOn.map((d) => results[d]).filter(Boolean);
     const dependencyText = deps.map((r) => `[${r.agent} / ${r.taskId}]:\n${r.text.slice(0, 1500)}`).join('\n\n');
@@ -121,7 +123,7 @@ export async function runHive({ request, project, catalog, mode = 'hive', prefer
   }
 
   const final = await synthesize({ request, results: Object.values(results), coordinator, catalog, preferFree });
-  run.finalAnswer = final.text;
+  run.finalAnswer = final.text || '';
   run.tasks = Object.values(results).map((r) => ({ taskId: r.taskId, role: r.role, agent: r.agent, provider: r.provider, model: r.model, status: r.status, durationMs: r.durationMs }));
   run.messages = bus.history();
   run.status = 'done';

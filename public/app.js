@@ -1,158 +1,175 @@
 'use strict';
 
-const t = (key, vars) => (window.I18n ? window.I18n.t(key, vars) : key);
+/* ============================================================
+   app.js — entry. Wires shell (sidebar, topbar, HUD), the chat
+   view, live SSE events into agents/timeline, and orchestration.
+   ============================================================ */
 
-/* ----------------------------- state ----------------------------- */
-const state = {
-  view: 'chat',
-  providers: [],
-  code: true,
-  conversations: load('ai-orch-conversations', []),
-  currentId: null,
-  agents: new Map(),
-  diversity: null,
-  runs: [],
-  openFile: null
+import { $, $$, el, escapeHtml, state, api, postJson, currentConv, persist, loadState } from './js/core.js';
+import { formatMarkdown } from './js/markdown.js';
+import { I } from './js/icons.js';
+import { entrance, staggerInView, moveNavIndicator, tickNumber, pulse } from './js/motion.js';
+import { I18n, t } from './i18n.js';
+import { toast, openCmdk, closeCmdk, bindNetwork } from './js/components.js';
+import { createChat, createComposer } from './js/views/chat.js';
+import * as S from './js/views/surfaces.js';
+
+window.__formatMarkdown = formatMarkdown;
+
+/* ============ network bridge for components ============ */
+const net = {
+  cmdkHost: document.getElementById('app'),
+  open: false,
+  switchView: (view) => showView(view),
+  setMode: (mode) => { coreStateMode(mode); },
+  commandExtras: () => [{
+    label: t('nav.newTask'), icon: 'plus', run: () => { newConversation(); showView('chat'); focusComposer(); }
+  }]
 };
+bindNetwork(net);
 
-function load(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-  catch { localStorage.removeItem(key); return fallback; }
-}
-function save(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
-function $(sel) { return document.querySelector(sel); }
-function el(tag, cls, html) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
-
-/* ----------------------------- api ----------------------------- */
-async function api(path, options) {
-  const res = await fetch(path, options);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data;
-}
-function postJson(path, body) { return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
-
-function toast(message, isError) {
-  const node = $('#toast');
-  node.textContent = message;
-  node.className = `toast show${isError ? ' err' : ''}`;
-  clearTimeout(node._timer);
-  node._timer = setTimeout(() => { node.className = 'toast'; }, 3200);
+function coreStateMode(mode) {
+  state.mode = mode;
+  persist('ai-orch-mode', mode);
+  const select = $('#mode-select');
+  if (select && select.value !== mode) select.value = MODE_KEYS.includes(mode) ? mode : select.value;
+  updateModeHint();
 }
 
-/* ----------------------------- markdown ----------------------------- */
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
-}
+/* ============ view switching ============ */
+const viewTitles = { chat: 'nav.chat', hive: 'nav.hive', files: 'nav.files', terminal: 'nav.terminal', git: 'nav.git', providers: 'nav.providers', runs: 'nav.runs', settings: 'nav.settings' };
 
-function formatText(text) {
-  const escaped = escapeHtml(text);
-  const parts = escaped.split(/```([\w.+-]*)\n([\s\S]*?)```/g);
-  let out = '';
-  for (let i = 0; i < parts.length; i += 3) {
-    const chunk = parts[i] || '';
-    out += chunk
-      .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.*)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.*)$/gm, '<h1>$1</h1>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-      .replace(/\n/g, '<br>');
-    if (parts[i + 2] !== undefined) {
-      const lang = escapeHtml(parts[i + 1] || '');
-      out += `<div class="code-wrap">${lang ? `<span class="lang-tag">${lang}</span>` : ''}`
-        + `<button class="mini code-copy" data-copy>${escapeHtml(t('files.save') === 'salvar' ? 'copiar' : 'copy')}</button>`
-        + `<code class="code-block">${parts[i + 2]}</code></div>`;
-    }
+export function showView(view) {
+  state.view = view;
+  $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
+  $$('.conv-item').forEach((n) => n.classList.remove('active'));
+  const navItem = $(`.nav-item[data-view="${view}"]`);
+  if (navItem) {
+    $$('.nav-item').forEach((n) => n.classList.toggle('active', n === navItem));
+    moveNavIndicator($('#nav-indicator'), navItem);
   }
-  return out;
+  $('#view-title').textContent = t(viewTitles[view] || 'nav.chat');
+
+  /* data-bound views refresh on entry */
+  const queue = [];
+  if (view === 'files') queue.push(S.refreshFiles());
+  if (view === 'runs') queue.push(refreshRuns());
+  if (view === 'settings') queue.push(S.loadSettings());
+  if (view === 'providers') queue.push(refreshProviders());
+  if (view === 'terminal') queue.push(S.initTerminal(t('term.ready')));
+  if (view === 'hive') renderAgents();
+  if (queue.length) Promise.all(queue).catch(() => {});
 }
 
-/* ----------------------------- chat ----------------------------- */
-function currentConv() { return state.conversations.find((c) => c.id === state.currentId); }
+function wireNav() {
+  $$('.nav-item').forEach((n) => n.addEventListener('click', () => showView(n.dataset.view)));
+  $$('.nav-item').forEach((n) => n.addEventListener(
+    'mouseenter',
+    () => pulse(n.querySelector('.nav-ico'))
+  ));
+}
 
+/* ============ conversations ============ */
 function newConversation() {
   const conv = { id: crypto.randomUUID(), title: t('chat.newTask'), titled: false, messages: [] };
-  state.conversations.unshift(conv);
+  state.convList.unshift(conv);
   state.currentId = conv.id;
-  save('ai-orch-conversations', state.conversations);
-  renderChat();
+  persist('ai-orch-conversations', state.convList);
+  renderConversations();
+  chat.render();
 }
 
-function renderChat() {
-  const chat = $('#chat');
-  const conv = currentConv();
-  chat.innerHTML = '';
-  if (!conv || !conv.messages.length) {
-    chat.innerHTML = `<div class="empty">${escapeHtml(t('chat.empty'))}</div>`;
-    return;
+function renderConversations() {
+  const list = $('#conv-list');
+  list.innerHTML = '';
+  for (const conv of state.convList.slice(0, 12)) {
+    const item = el('div', `conv-item ${conv.id === state.currentId ? 'active' : ''}`, `
+      <span class="conv-title">${escapeHtml(conv.title || t('chat.newTask'))}</span>
+      <button class="conv-del" aria-label="delete">${I.x}</button>`);
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.conv-del')) { return; }
+      state.currentId = conv.id;
+      persist('ai-orch-conversations', state.convList);
+      renderConversations();
+      chat.render();
+    });
+    item.querySelector('.conv-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.convList = state.convList.filter((c) => c.id !== conv.id);
+      if (state.currentId === conv.id) state.currentId = state.convList[0]?.id || null;
+      persist('ai-orch-conversations', state.convList);
+      renderConversations();
+      chat.render();
+    });
+    list.appendChild(item);
   }
-  for (const m of conv.messages) {
-    const wrap = el('div', `msg ${m.role}`);
-    const who = m.role === 'user' ? t('chat.you') : t('chat.ai');
-    wrap.innerHTML = `<div class="avatar">${escapeHtml(who)}</div>`
-      + `<div><div class="bubble">${m.pending ? '<span class="thinking"><span></span><span></span><span></span></span>' : formatText(m.content)}</div>`
-      + `<div class="meta">${escapeHtml(m.meta || '')}</div></div>`;
-    chat.appendChild(wrap);
-  }
-  chat.scrollTop = chat.scrollHeight;
 }
+
+/* ============ orchestration (send) ============ */
+const STREAM_MODES = new Set(['normal', 'fallback', 'auto']);
 
 async function sendMessage(text) {
   if (!currentConv()) newConversation();
   const conv = currentConv();
-  conv.messages.push({ role: 'user', content: text });
+  const attachmentBlock = state.attachments.length ? `\n\n[${state.attachments.join('\n')}]` : '';
+  conv.messages.push({ role: 'user', content: text + attachmentBlock });
   if (!conv.titled) { conv.title = text.slice(0, 46); conv.titled = true; }
-  const placeholder = { role: 'assistant', content: '', meta: t('meta.orchestrating'), pending: true };
-  conv.messages.push(placeholder);
-  save('ai-orch-conversations', state.conversations);
-  renderChat();
+  const pending = { role: 'assistant', content: '', pending: true, meta: t('meta.orchestrating') };
+  conv.messages.push(pending);
+  persist('ai-orch-conversations', state.convList);
+  renderConversations();
+  composer.setBusy(true);
+  chat.render();
+  document.body.classList.add('is-orchestrating');
+  startPipeline(text);
 
-  const mode = $('#modeSelect').value;
+  const attachmentPaths = [...state.attachments];
+  state.attachments = [];
+  composer.renderAttach();
+
+  /* request context may reference attached files; backend accepts extra messages role user */
   const payload = {
-    providerId: $('#providerSelect').value,
-    model: $('#modelInput').value.trim() || undefined,
-    mode,
-    messages: conv.messages.filter((m) => m !== placeholder).map((m) => ({ role: m.role, content: m.content })),
+    providerId: state.providerId || undefined,
+    model: state.model || undefined,
+    mode: state.mode,
+    messages: conv.messages.filter((m) => m !== pending).map((m) => ({ role: m.role, content: m.content })),
     profile: state.code ? 'coding' : 'general',
     temperature: 0.3,
     maxTokens: 6144
   };
 
-  const streaming = ['normal', 'fallback', 'auto'].includes(mode);
+  const streaming = STREAM_MODES.has(state.mode);
   try {
-    if (streaming) await streamChat(payload, placeholder);
+    if (streaming) await streamChat(payload, pending);
     else {
-      const data = await postJson('/api/chat', payload);
-      placeholder.pending = false;
-      placeholder.content = data.text || '(empty)';
-      placeholder.meta = metaFor(data);
+      const result = await postJson('/api/chat', payload);
+      pending.pending = false;
+      pending.content = result.text || '(empty)';
+      pending.meta = metaFor(result);
+      pipelineStep(3);
     }
+    agentStatus = 'done';
   } catch (error) {
-    placeholder.pending = false;
-    placeholder.content = `Error: ${error.message}`;
-    placeholder.meta = 'failed';
-    toast(error.message, true);
+    pending.pending = false;
+    pending.content = '';
+    pending.meta = t('meta.failed');
+    pending.error = error.message;
+    toast(error.message, 'error');
+    pipelineFail();
   }
-  save('ai-orch-conversations', state.conversations);
-  renderChat();
+  persist('ai-orch-conversations', state.convList);
+  composer.setBusy(false);
+  document.body.classList.remove('is-orchestrating');
+  chat.render();
   refreshRuns();
 }
 
-function metaFor(data) {
-  const bits = [];
-  if (data.provider) bits.push(`${data.provider} · ${data.model}`);
-  if (data.fallback) bits.push(t('meta.fallback'));
-  if (data.agentCount) bits.push(t('meta.agents', { n: data.agentCount }));
-  if (data.synthesized) bits.push(t('meta.synthesis'));
-  if (data.diversity) bits.push(t('meta.diversity', { p: data.diversity.providerDiversity, f: data.diversity.familyDiversity }));
-  if (data.mode) bits.push(data.mode);
-  if (data.durationMs) bits.push(`${(data.durationMs / 1000).toFixed(1)}s`);
-  return bits.join(' · ');
-}
-
-async function streamChat(payload, placeholder) {
-  const res = await fetch('/api/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+async function streamChat(payload, pending) {
+  const res = await fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -166,344 +183,292 @@ async function streamChat(payload, placeholder) {
     const blocks = buffer.split('\n\n');
     buffer = blocks.pop() || '';
     for (const block of blocks) {
-      const ev = block.match(/^event:\s*(.+)$/m);
-      const dm = block.match(/^data:\s*(.+)$/m);
+      const ev = block.match(/^event:\s*(.+)$/m)?.[1]?.trim();
+      const dm = block.match(/^data:\s*(.+)$/m)?.[1];
       if (!ev || !dm) continue;
-      let data; try { data = JSON.parse(dm[1]); } catch { continue; }
-      if (ev[1].trim() === 'delta') {
+      let data; try { data = JSON.parse(dm); } catch { continue; }
+      if (ev === 'delta') {
         acc += data.delta || '';
-        placeholder.pending = false;
-        placeholder.content = acc;
-        placeholder.meta = t('meta.streaming');
-        renderChat();
-      } else if (ev[1].trim() === 'done') {
-        placeholder.pending = false;
-        placeholder.content = data.text || acc;
-        finalMeta = metaFor(data);
-      } else if (ev[1].trim() === 'error') {
-        throw new Error(data.error || 'stream error');
-      }
+        pending.pending = false;
+        pending.streaming = true;
+        pending.content = acc;
+        pending.meta = t('meta.streaming');
+        chat.streamUpdate();
+      } else if (ev === 'done') {
+        pending.pending = false;
+        pending.streaming = false;
+        pending.content = data.text || acc;
+        pending.meta = metaFor(data);
+        finalMeta = pending.meta;
+      } else if (ev === 'error') { throw new Error(data.error || 'stream error'); }
     }
   }
-  placeholder.pending = false;
-  placeholder.content = placeholder.content || acc || '(empty)';
-  placeholder.meta = finalMeta || t('meta.done');
+  pending.streaming = false;
+  pending.meta = finalMeta || t('meta.done');
 }
 
-/* ----------------------------- SSE timeline / agents ----------------------------- */
+function metaFor(data) {
+  const bits = [];
+  if (data.provider) bits.push(`${data.provider}·${data.model || ''}`);
+  if (data.fallback) bits.push(t('meta.fallback'));
+  if (data.agentCount) bits.push(t('meta.agents', { n: data.agentCount }));
+  if (data.synthesized) bits.push(t('meta.synthesis'));
+  if (data.diversity) bits.push(t('meta.diversity', { p: data.diversity.providerDiversity, f: data.diversity.familyDiversity }));
+  if (data.mode) bits.push(data.mode);
+  if (data.durationMs) bits.push(`${(data.durationMs / 1000).toFixed(1)}s`);
+  return bits.join(' · ');
+}
+
+/* ============ pipeline drive ============ */
+const PIPE_STEPS = ['pipe.request', 'pipe.plan', 'pipe.agents', 'pipe.process', 'pipe.result'];
+let pipelineNodes = [];
+
+function startPipeline() {
+  const host = $('#pipeline-host');
+  host.innerHTML = '';
+  pipelineNodes = [];
+  const pipe = document.createElement('div');
+  pipe.className = 'pipeline';
+  pipe.innerHTML = `<div class="pipeline-bar"><span class="loader-dots"><i></i><i></i><i></i></span>
+      <span class="pb-label">${escapeHtml(t('meta.orchestrating'))}</span></div>
+    <div class="pipeline-steps">${PIPE_STEPS.map((k) => `
+      <div class="pipe-step"><span class="pipe-node"></span><span class="pipe-text">${escapeHtml(t(k))}</span></div>`).join('<span class="pipe-link"></span>')}
+    </div>
+    <div class="pipe-status"></div>`;
+  host.appendChild(pipe);
+  entrance(pipe);
+  pipelineNodes = $$('.pipe-step', pipe);
+  pipelineStep(1);                 // request acknowledged → planning
+}
+
+function pipelineStep(index) {
+  pipelineNodes.forEach((n, j) => {
+    n.classList.toggle('done', j < index);
+    n.classList.toggle('active', j === index);
+  });
+}
+
+function pipelineDone(seconds) {
+  pipelineNodes.forEach((n) => { n.classList.remove('active'); n.classList.add('done'); });
+  const status = $('.pipe-status', $('#pipeline-host'));
+  if (status) status.textContent = t('pipe.status.done', { s: seconds });
+}
+
+function pipelineFail() {
+  pipelineNodes.forEach((n) => n.classList.remove('active'));
+  const status = $('.pipe-status', $('#pipeline-host'));
+  if (status) { status.textContent = t('pipe.status.error'); status.style.color = 'var(--red)'; }
+}
+function finalizePipeline(seconds) { pipelineDone(seconds); }
+void finalizePipeline;
+
+/* ============ SSE events → agents + timeline ============ */
 function connectEvents() {
   const source = new EventSource('/api/events');
-  source.addEventListener('event', (message) => {
-    let event; try { event = JSON.parse(message.data); } catch { return; }
-    handleEvent(event);
+  source.addEventListener('event', (m) => {
+    try { S.appendTimeline(JSON.parse(m.data)); handleEvent(JSON.parse(m.data)); } catch { /* malformed */ }
   });
   source.onerror = () => setStatus(false, t('status.offline'));
   source.onopen = () => refreshStatus();
 }
 
-function timeOf(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour12: false }); }
-
 function handleEvent(event) {
-  const kind = String(event.type || '').split('.')[0];
-  appendTimeline(event, kind);
-
   if (event.type === 'agent.start') {
     state.agents.set(event.taskId, { id: event.taskId, role: event.role, agent: event.agent, provider: event.provider, model: event.model, title: event.title, status: 'running' });
     renderAgents();
   }
   if (event.type === 'agent.status') {
-    const a = findAgentByName(event.agent);
-    if (a) { a.status = event.status === 'error' ? 'failed' : 'running'; a.model = event.model || a.model; renderAgents(); }
+    for (const a of state.agents.values()) {
+      if (a.agent === event.agent) { a.status = 'running'; a.model = event.model || a.model; }
+    }
+    renderAgents();
   }
   if (event.type === 'agent.done') {
     const a = state.agents.get(event.taskId);
-    if (a) { a.status = event.ok ? 'done' : 'failed'; a.durationMs = event.durationMs; a.error = event.error; renderAgents(); }
+    if (a) { a.status = event.ok ? 'done' : 'failed'; a.durationMs = event.durationMs; a.error = event.error; }
+    renderAgents();
   }
-  if (event.type === 'hive.models' || event.type === 'super.models') { state.diversity = event.diversity; renderAgents(); }
+  if (event.type === 'hive.models' || event.type === 'super.models') {
+    state.diversity = event.diversity;
+    renderAgents();
+  }
   if (event.type === 'task.plan') {
     state.agents.clear();
-    (event.tasks || []).forEach((task) => state.agents.set(task.id, { id: task.id, role: task.role, title: task.title, status: 'pending', dependsOn: task.dependsOn }));
+    (event.tasks || []).forEach((task) => state.agents.set(task.id, { id: task.id, role: task.role, agent: task.role, title: task.title, status: 'pending', dependsOn: task.dependsOn }));
     renderAgents();
-    toast(t('toast.planned', { n: event.tasks.length, source: event.source }));
+    pipelineStep(2);
+    toast(t('toast.planned', { n: event.tasks.length, source: event.source }), 'info');
   }
-}
-
-function findAgentByName(name) { for (const a of state.agents.values()) if (a.agent === name) return a; return null; }
-
-function appendTimeline(event, kind) {
-  const box = $('#timeline');
-  if (!box.querySelector('.empty')) { /* keep */ }
-  const row = el('div', 'tl-row');
-  row.innerHTML = `<div class="tl-time">${timeOf(event.ts)}</div>`
-    + `<div class="tl-body"><span class="tl-kind ${kind}">${kind}</span>${describeEvent(event)}</div>`;
-  box.appendChild(row);
-  box.scrollTop = box.scrollHeight;
-  const rows = box.querySelectorAll('.tl-row');
-  if (rows.length > 300) rows[0].remove();
-}
-
-function describeEvent(e) {
-  const esc = escapeHtml;
-  switch (e.type) {
-    case 'task.start': return `<b>Master</b> started task (${esc(e.mode)})`;
-    case 'task.plan': return `<b>Master</b> planned: ${esc(e.summary || '')}`;
-    case 'task.done': return `<b>Master</b> finished (${e.agents} agents)`;
-    case 'hive.models': return `Models assigned — diversity ${e.diversity?.providerDiversity}p/${e.diversity?.familyDiversity}f`;
-    case 'super.models': return `Super Mode models — diversity ${e.diversity?.providerDiversity}p/${e.diversity?.familyDiversity}f`;
-    case 'super.consensus': return `Consensus — ${e.critiques} critiques, ${e.disagreements} with disagreement`;
-    case 'agent.start': return `<b>${esc(e.agent)}</b> started "${esc(e.title || e.taskId)}" on ${esc(e.provider)}:${esc(e.model || '?')}`;
-    case 'agent.status': return `<b>${esc(e.agent)}</b> ${esc(e.status)}${e.model ? ` · ${esc(e.model)}` : ''}`;
-    case 'agent.done': return e.ok ? `<b>${esc(e.agent)}</b> finished in ${((e.durationMs || 0) / 1000).toFixed(1)}s` : `<b>${esc(e.agent)}</b> failed: ${esc(e.error || '')}`;
-    case 'tool.start': return `tool <b>${esc(e.tool)}</b> started`;
-    case 'tool.done': return `tool <b>${esc(e.tool)}</b> ${e.ok ? 'ok' : 'failed'} (${e.durationMs}ms)`;
-    case 'message': return `<b>${esc(e.from)}</b> → <b>${esc(e.to)}</b> [${esc(e.type)}] ${esc(e.content || '')}`;
-    case 'debug.attempt': return `debug attempt ${e.attempt}`;
-    case 'debug.fixing': return `debug fixing with ${esc(e.provider)}:${esc(e.model)}`;
-    case 'debug.done': return `debug ${e.ok ? 'converged' : 'did not converge'}`;
-    case 'server.ready': return 'server ready';
-    default: return esc(e.type);
+  if (event.type === 'agent.start' && !document.body.classList.contains('is-orchestrating')) {
+    document.body.classList.add('is-orchestrating');
   }
+  if (event.type === 'task.done') { pipelineStep(4); setTimeout(() => pipelineDone(((event.durationMs || 0) / 1000).toFixed(1)), 250); }
 }
 
-/* ----------------------------- agents render ----------------------------- */
 function renderAgents() {
-  const grid = $('#agentGrid');
-  if (!state.agents.size) { grid.innerHTML = `<div class="empty">${escapeHtml(t('hive.empty'))}</div>`; return; }
-  grid.innerHTML = '';
-  for (const a of state.agents.values()) {
-    const card = el('div', `agent-card ${a.status}`);
-    const model = a.provider ? `${a.provider}:${a.model || '?'}` : (a.model || '—');
-    card.innerHTML = `<div class="ac-head"><span class="ac-role">${escapeHtml(a.agent || a.role || t('agent.pending'))}</span><span class="ac-status ${a.status}">${escapeHtml(statusLabel(a.status))}</span></div>`
-      + `<div class="ac-model">${escapeHtml(model)}</div>`
-      + `<div class="ac-task">${escapeHtml(a.title || a.role || '')}${a.durationMs ? ` · ${(a.durationMs / 1000).toFixed(1)}s` : ''}</div>`
-      + (a.status === 'running' ? '<div class="progress"><i></i></div>' : '');
-    grid.appendChild(card);
-  }
-  if (state.diversity) $('#hiveDiversity').textContent = t('hive.diversity', { p: state.diversity.providerDiversity, f: state.diversity.familyDiversity });
-}
-function statusLabel(s) { return t(`state.${s === 'running' ? 'running' : s === 'done' ? 'done' : s === 'failed' ? 'failed' : 'pending'}`); }
-
-/* ----------------------------- files ----------------------------- */
-async function refreshFiles() {
-  try {
-    const data = await api('/api/files?depth=4');
-    const box = $('#fileTree');
-    box.innerHTML = '';
-    if (!data.entries.length) { box.innerHTML = `<div class="empty">${escapeHtml(t('files.empty'))}</div>`; return; }
-    for (const entry of data.entries) {
-      const row = el('div', `ft-row ${entry.type === 'file' ? 'file' : ''}`);
-      row.innerHTML = `<span>${entry.type === 'dir' ? '📁' : fileIcon(entry.path)}</span><span>${escapeHtml(entry.path)}</span>`
-        + (entry.size ? `<span class="sz">${(entry.size / 1024).toFixed(1)}k</span>` : '');
-      if (entry.type === 'file') row.onclick = () => openFile(entry.path);
-      box.appendChild(row);
-    }
-  } catch (error) { toast(error.message, true); }
-}
-function fileIcon(p) {
-  const ext = p.split('.').pop();
-  return ({ js: '🟨', ts: '🔷', json: '🟦', md: '📘', css: '🎨', html: '🌐', sh: '🐚', py: '🐍' }[ext]) || '📄';
-}
-async function openFile(path) {
-  try {
-    const data = await api(`/api/file?path=${encodeURIComponent(path)}`);
-    state.openFile = path;
-    $('#editorPath').textContent = path;
-    $('#editor').value = data.content;
-  } catch (error) { toast(error.message, true); }
-}
-async function saveFile() {
-  if (!state.openFile) return toast(t('toast.noFile'), true);
-  try {
-    await postJson('/api/file', { path: state.openFile, content: $('#editor').value });
-    toast(t('toast.saved', { path: state.openFile }));
-  } catch (error) { toast(error.message, true); }
+  S.renderAgents();
+  const running = [...state.agents.values()].filter((a) => a.status === 'running').length;
+  $('#busybar').classList.toggle('show', running > 0);
+  if (running > 0) $('#busybar-count').textContent = t('busybar.working', { n: running });
 }
 
-/* ----------------------------- terminal / git ----------------------------- */
-async function runTerminal(command) {
-  const out = $('#termOut');
-  out.textContent += `\n$ ${command}\n`;
-  try {
-    const data = await postJson('/api/tools/run', { tool: 'run_command', params: { command, confirm: true } });
-    out.textContent += `${data.ok ? '✓' : '✗'} ${data.stdout || data.stderr || data.error || '(no output)'}\n`;
-  } catch (error) { out.textContent += `error: ${error.message}\n`; }
-  out.textContent += '---\n';
-  out.scrollTop = out.scrollHeight;
-}
-async function runGit(tool) {
-  const out = $('#gitOut');
-  out.textContent = `${tool}…`;
-  try {
-    const data = await postJson('/api/tools/run', { tool, params: {} });
-    const body = data.stdout || data.stderr || data.error || JSON.stringify(data, null, 2);
-    out.textContent = `${data.ok ? '✓' : '✗'} ${body}`;
-  } catch (error) { out.textContent = error.message; }
+/* ============ status / HUD ============ */
+function setStatus(ok, text) {
+  state.status.online = ok;
+  state.status.label = text;
+  $('#status-dot').className = `dot ${ok ? 'online' : 'offline'}`;
+  $('#status-text').textContent = text;
 }
 
-/* ----------------------------- providers / settings ----------------------------- */
+async function refreshStatus() {
+  try {
+    const s = await api('/api/status');
+    const configured = (s.providers || []).filter((p) => p.configured).length;
+    const workspaceText = s.workspace ? t('status.workspace') : t('status.connecting');
+    setStatus(configured > 0, configured > 0 ? t('status.providers', { n: configured }) : t('status.noProviders'));
+    $('#ws-path').textContent = s.workspace || '';
+    $('#topbar-sub').textContent = `${s.tools?.project?.name || 'project'} · ${(s.tools?.project?.ecosystems || []).join(', ') || '—'}`;
+    state.hud.tools = s.tools?.tool_count ?? state.hud.tools;
+    renderHUD();
+  } catch { setStatus(false, t('status.offline')); }
+}
+
+function renderHUD() {
+  const hud = $('#hud');
+  if (!hud) return;
+  hud.innerHTML = `
+    <div class="hud-cell"><span class="hud-num">${state.hud.tools}</span><span class="hud-label meta-label">${t('hud.tools')}</span></div>
+    <div class="hud-cell"><span class="hud-num">${state.hud.roles}</span><span class="hud-label meta-label">${t('hud.agents')}</span></div>
+    <div class="hud-cell"><span class="hud-num serif">${escapeHtml(state.hud.prompts)}</span><span class="hud-label meta-label">${t('hud.prompts')}</span></div>`;
+}
+
 async function refreshProviders() {
   try {
     const providers = await api('/api/providers');
     state.providers = providers;
     const configured = providers.filter((p) => p.configured);
-    $('#providerSelect').innerHTML = configured.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('') || '<option value="">—</option>';
-    setStatus(configured.length > 0, t('status.providers', { n: configured.length }));
-    $('#providerCount').textContent = t('providers.configured', { n: configured.length, m: providers.length });
-    renderProviderGrid(providers);
-    loadMatrix();
-  } catch { setStatus(false, t('status.offline')); }
-}
-
-function renderProviderGrid(providers) {
-  const grid = $('#providerGrid');
-  grid.innerHTML = '';
-  for (const p of providers) {
-    const health = p.health || {};
-    const stateClass = p.configured ? (health.state === 'degraded' ? 'warn' : health.state === 'offline' ? 'bad' : 'ok') : 'bad';
-    const card = el('div', 'provider-card');
-    card.innerHTML = `<div class="pc-top"><div><b>${escapeHtml(p.name)}</b><div class="id">${escapeHtml(p.id)}</div></div>`
-      + `<span class="pill ${stateClass}">${p.configured ? escapeHtml(health.state || 'online') : 'no key'}</span></div>`
-      + `<div class="pc-meta"><span class="pill">${escapeHtml(p.transport)}</span><span class="pill">priority ${p.priority}</span>`
-      + `<span class="pill">${p.freePool ? 'free' : 'paid'}</span><span class="pill">${health.avgLatencyMs ? health.avgLatencyMs + 'ms' : 'no data'}</span></div>`
-      + `<div class="id">model: ${escapeHtml(p.defaultModel)}</div>`
-      + `<div class="caps">${Object.entries(p.capabilities || {}).filter(([, v]) => v).map(([k]) => `<span class="pill">${escapeHtml(k)}</span>`).join('')}</div>`;
-    grid.appendChild(card);
-  }
-}
-
-async function loadMatrix() {
-  try {
-    const { matrix } = await api('/api/models');
-    const caps = ['coding', 'reasoning', 'security', 'research', 'speed'];
-    const head = `<tr><th>model</th>${caps.map((c) => `<th>${c}</th>`).join('')}</tr>`;
-    const rows = matrix.slice(0, 60).map((m) => `<tr><td>${escapeHtml(m.providerId)}:<b>${escapeHtml(m.modelId)}</b></td>`
-      + caps.map((c) => `<td><span class="mbar"><i style="width:${Math.round((m.capabilities[c] || 0) * 100)}%"></i></span></td>`).join('') + '</tr>').join('');
-    $('#matrixWrap').innerHTML = `<table class="matrix">${head}${rows}</table>`;
-  } catch { /* optional */ }
-}
-
-async function loadPermissions() {
-  try {
-    const { permissions } = await api('/api/tools');
-    $('#permList').innerHTML = permissions.map((p) => `<div class="perm-row"><span>${p.permission}</span>`
-      + `<span class="pill ${p.enabled ? 'ok' : 'bad'}">${p.enabled ? 'enabled' : 'blocked'}</span></div>`).join('');
-  } catch { /* optional */ }
+    S.renderProviders(providers);
+    $('#provider-count').innerHTML = `<span class="chip chip-green">${t('providers.configured', { n: configured.length, m: providers.length })}</span>`;
+    composer?.syncProviders();
+    if (!configured.length) toast(t('toast.noProviders'), 'info');
+  } catch (error) { setStatus(false, t('status.offline')); }
 }
 
 async function refreshRuns() {
   try {
     const { runs } = await api('/api/memory/runs');
     state.runs = runs;
-    const box = $('#runsList');
-    box.innerHTML = runs.length ? '' : `<div class="empty">${escapeHtml(t('runs.empty'))}</div>`;
-    for (const r of runs) {
-      const row = el('div', 'run-row');
-      row.innerHTML = `<div><div class="r-task">${escapeHtml(r.task || '')}</div><div class="r-meta">${escapeHtml(r.mode)} · ${new Date(r.createdAt).toLocaleString()}</div></div><span class="pill">${escapeHtml(r.status)}</span>`;
-      row.onclick = () => loadRun(r.id);
-      box.appendChild(row);
-    }
+    S.renderRuns(runs, S.openRunDetail);
   } catch { /* optional */ }
 }
 
-async function loadRun(id) {
-  try {
-    const run = await api(`/api/memory/runs/${id}`);
-    const detail = (run.tasks || []).map((task) => ({ id: task.taskId, role: task.role, agent: task.agent, provider: task.provider, model: task.model, status: task.status, durationMs: task.durationMs }));
-    if (detail.length) { state.agents.clear(); detail.forEach((task) => state.agents.set(task.id, task)); }
-    showView('hive');
-    renderAgents();
-    toast(t('toast.run', { id, n: detail.length }));
-  } catch (error) { toast(error.message, true); }
+/* ============ composer + chat wiring ============ */
+let chat, composer;
+const MODE_KEYS = ['hive', 'build', 'multi-agent', 'super', 'debug', 'review', 'auto', 'fallback', 'custom'];
+
+function updateModeHint() {
+  const mode = state.mode;
+  const hint = $('#mode-hint');
+  if (hint) {
+    hint.innerHTML = `${t('hint.' + mode)}`;
+  }
+  const select = $('#mode-select');
+  if (select && select.value !== mode) {
+    select.value = MODE_KEYS.includes(mode) ? mode : mode;
+  }
 }
 
-/* ----------------------------- status / nav ----------------------------- */
-function setStatus(ok, text) {
-  $('#statusDot').className = `dot ${ok ? 'online' : 'offline'}`;
-  $('#statusText').textContent = text;
-}
-async function refreshStatus() {
-  try {
-    const s = await api('/api/status');
-    const configured = (s.providers || []).filter((p) => p.configured).length;
-    setStatus(configured > 0, t('status.providers', { n: configured }));
-    $('#projectChip').textContent = `${s.tools?.project?.name || 'project'} · ${(s.tools?.project?.ecosystems || []).join(', ') || '?'}`;
-    $('#wsPath').textContent = s.workspace || '';
-  } catch { setStatus(false, t('status.offline')); }
-}
+function focusComposer() { $('#composer-textarea')?.focus(); }
 
-const MODE_HINT_KEY = {
-  normal: 'hint.normal', fallback: 'hint.fallback', auto: 'hint.auto', 'multi-agent': 'hint.multiAgent',
-  hive: 'hint.hive', super: 'hint.super', build: 'hint.build', debug: 'hint.debug', review: 'hint.review', custom: 'hint.custom'
-};
-
-function showView(view) {
-  state.view = view;
-  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
-  document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === view));
-  $('#viewTitle').textContent = t(`view.${view}`);
-  if (view === 'files') refreshFiles();
-  if (view === 'runs') refreshRuns();
-  if (view === 'settings') loadPermissions();
-  if (view === 'providers') refreshProviders();
-}
-
-/* ----------------------------- wiring ----------------------------- */
-function wire() {
-  document.querySelectorAll('.nav-item').forEach((n) => { n.onclick = () => showView(n.dataset.view); });
-
-  $('#composer').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const text = $('#input').value.trim();
-    if (!text) return;
-    $('#input').value = '';
-    sendMessage(text);
-  });
-  $('#input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#composer').requestSubmit(); }
-  });
-  $('#codeToggle').onclick = (e) => { state.code = !state.code; e.currentTarget.classList.toggle('on', state.code); };
-
-  const applyModeHint = () => { $('#modeHint').textContent = t(MODE_HINT_KEY[$('#modeSelect').value] || 'hint.hive'); };
-  $('#modeSelect').addEventListener('change', applyModeHint);
-  applyModeHint();
-
-  $('#langSelect').addEventListener('change', (e) => {
-    window.I18n.setLang(e.target.value);
-    window.I18n.apply();
-    applyModeHint();
-    renderChat();
-    renderAgents();
-    refreshProviders();
-    refreshRuns();
-  });
-
-  $('#clearTimeline').onclick = () => { $('#timeline').innerHTML = ''; };
-  $('#refreshFiles').onclick = refreshFiles;
-  $('#saveFile').onclick = saveFile;
-  $('#refreshRuns').onclick = refreshRuns;
-  $('#termForm').addEventListener('submit', (e) => { e.preventDefault(); const c = $('#termCmd').value.trim(); if (!c) return; $('#termCmd').value = ''; runTerminal(c); });
-  document.querySelectorAll('[data-git]').forEach((b) => { b.onclick = () => runGit(b.dataset.git); });
-
-  document.addEventListener('click', (e) => {
-    const copy = e.target.closest('[data-copy]');
-    if (copy) {
-      const code = copy.closest('.code-wrap')?.querySelector('.code-block')?.textContent || '';
-      navigator.clipboard.writeText(code).then(() => toast(t('toast.copied'))).catch(() => {});
-    }
-  });
-}
-
-/* ----------------------------- boot ----------------------------- */
+/* ============ boot ============ */
 function boot() {
-  if (window.I18n) { window.I18n.init(); window.I18n.apply(); $('#langSelect').value = window.I18n.lang; }
-  wire();
-  if (!state.conversations.length) newConversation(); else { state.currentId = state.conversations[0].id; renderChat(); }
-  renderAgents();
+  I18n.init();
+  document.title = I18n.t('brand.name');
+  $('#brand-name').textContent = I18n.t('brand.name');
+  $('#brand-sub').textContent = I18n.t('brand.sub');
+  buildShellText();
+  wireTopbar();
+  wireNav();
+  wireSidebar();
+  wireKeys();
+  chat = createChat({ onChange: renderConversations });
+  composer = createComposer({ onSend: sendMessage, onModeChange: updateModeHint });
+  wireSidebarData();
+  if (!state.convList.length) newConversation();
+  else { state.currentId = state.convList[0].id; renderConversations(); chat.render(); }
+  const savedMode = loadState('ai-orch-mode', state.mode);
+  if (MODE_KEYS.includes(savedMode)) state.mode = savedMode;
+  if (!$('#mode-select').value) updateModeHint();
+  connectEvents();
   refreshStatus();
   refreshProviders();
   refreshRuns();
-  connectEvents();
   setInterval(refreshStatus, 20000);
+  setTimeout(() => toast(t('toast.welcome'), 'info'), 900);
+}
+
+function wireSidebar() {
+  /* ícones estáticos + chips do hero + fluxos fixos */
+  $$('.nav-item [data-ico]').forEach((n) => { n.innerHTML = I[n.dataset.ico] || I.spark; });
+  $('#attach-btn').innerHTML = I.paperclip;
+  $('#composer-send').innerHTML = I.send;
+  $('#refresh-files').innerHTML = I.refresh;
+  const heroChips = $('#hero-chips');
+  if (heroChips) {
+    heroChips.innerHTML = [
+      { k: 'hive', ico: 'hive' }, { k: 'multi-agent', ico: 'spark' }, { k: 'super', ico: 'jarvis' }, { k: 'debug', ico: 'bolt' }
+    ].map((c) => `<button class="hero-chip" data-mode="${c.k}" type="button">${I[c.ico]}<span>${escapeHtml(I18n.t('mode.' + c.k))}</span></button>`).join('');
+    $$('.hero-chip', heroChips).forEach((chip) => {
+      chip.addEventListener('click', () => {
+        coreStateMode(chip.dataset.mode);
+        focusComposer();
+        toast(I18n.t('hint.' + chip.dataset.mode), 'info');
+      });
+    });
+  }
+}
+
+function wireSidebarData() {
+  $('#refresh-files')?.addEventListener('click', S.refreshFiles);
+  $('#clear-timeline')?.addEventListener('click', S.clearTimeline);
+  $('#refresh-runs')?.addEventListener('click', refreshRuns);
+}
+
+function buildShellText() {
+  const titles = Object.entries(viewTitles);
+  $$('.nav-item').forEach((n) => {
+    const span = n.querySelector('.nav-label');
+    if (span) span.textContent = t(viewTitles[n.dataset.view] || '');
+  });
+  $('#tb-menu-icon').innerHTML = I.menu;
+  $('#topbar-cmdk').innerHTML = `${I.search}<span class="meta-label">${t('top.cmdk')} ⌘K</span>`;
+  $('#nav-new-task').innerHTML = `${I.plus}<span>${t('nav.newTask')}</span>`;
+  $('#lang-select').value = I18n.lang;
+}
+function wireTopbar() {
+  $$('.view').forEach((v) => { if (!v.dataset.view) v.dataset.view = v.id.replace('view-', ''); });
+  $('#tb-menu').addEventListener('click', () => $('#app').classList.toggle('drawer-open'));
+  $('#drawer-overlay').addEventListener('click', () => $('#app').classList.remove('drawer-open'));
+  $('#topbar-cmdk').addEventListener('click', openCmdk);
+  $('#lang-select').addEventListener('change', (e) => {
+    I18n.setLang(e.target.value);
+    buildShellText();
+    updateModeHint();
+    chat.render();
+    S.clearTimeline();
+  });
+  $('#code-toggle').addEventListener('click', (e) => {
+    state.code = !state.code;
+    e.currentTarget.classList.toggle('on', state.code);
+    if (state.code) pulse(e.currentTarget.querySelector('.seg-dot'));
+  });
+}
+function wireKeys() {
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); net.open ? closeCmdk() : openCmdk(); }
+    if (e.key === 'Escape' && net.open) closeCmdk();
+    if (e.key === '/' && !['TEXTAREA', 'INPUT'].includes(document.activeElement?.tagName)) { e.preventDefault(); openCmdk(); }
+  });
 }
 
 boot();

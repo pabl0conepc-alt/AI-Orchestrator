@@ -1,0 +1,115 @@
+/* ============================================================
+   ait.css — completion pass. Small additions that finish the
+   design system without touching the layered modules above.
+   ============================================================ */
+
+/* ---------- Topbar command chip ---------- */
+.tb-cmdk {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--t-hover) var(--ease-out), color var(--t-hover) var(--ease-out), transform var(--t-hover) var(--ease-out);
+}
+.tb-cmdk svg { display: block; color: var(--muted); transition: color var(--t-hover) var(--ease-out); }
+.tb-cmdk span:hover { color: var(--ink); }
+.tb-cmdk:hover { border-color: var(--border-strong); color: var(--ink); transform: translateY(-1px); }
+.tb-cmdk:hover svg { color: var(--accent-deep); }
+.tb-cmdk:active { transform: translateY(0) scale(0.98); }
+
+/* language select in topbar */
+.select-lang { width: 64px; font-size: var(--fs-caption); height: 32px; }
+.tb-label { display: inline-flex; }
+
+/* ---------- Busy bar (orchestrator working) ---------- */
+.busybar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--s-5) + 8px);
+  transform: translateX(-50%) translateY(56px);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 8px var(--s-4);
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  box-shadow: var(--shadow-3);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 340ms var(--ease-out), opacity 240ms var(--ease-out);
+  z-index: var(--z-toast);
+}
+.busybar.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+.busybar .loader-dots { color: var(--console-accent); }
+
+/* ---------- hive / runs empty blocks ---------- */
+.hive-empty {
+  padding: var(--s-12) var(--s-6);
+  text-align: center;
+}
+.hive-empty h1 { font-size: var(--fs-h1); margin-bottom: var(--s-2); }
+.hive-empty p { color: var(--ink-2); font-size: var(--fs-small); max-width: 44ch; margin: 0 auto; }
+
+/* ---------- mode hint ---------- */
+.mode-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  transition: color var(--t-fade) var(--ease-out), opacity var(--t-fade) var(--ease-out);
+}
+.mode-hint.enter { opacity: 0; transform: translateY(3px); }
+.mode-hint.enter.show { opacity: 1; transform: none; }
+.mode-hint svg { color: var(--accent-deep); opacity: 0.7; flex-shrink: 0; }
+
+/* ---------- attach chip row spacing ---------- */
+.attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: 0 var(--s-3) 0;
+}
+.attach-row:empty { padding: 0; }
+
+/* ---------- ai-glyph + timeline kind colors ---------- */
+.ai-glyph { display: inline-flex; color: var(--accent-deep); }
+.ai-glyph.working .orbit, .is-orchestrating .brand .orbit { animation: orbit-spin 9s linear infinite; }
+.ai-glyph.idle .orbit { transition: transform 0.5s var(--ease-out); }
+.ai-glyph.idle:hover .orbit { transform: rotate(40deg); }
+.timeline .tl-kind-agent { color: var(--accent-deep); }
+.timeline .tl-kind-tool { color: var(--blue); }
+.timeline .tl-kind-task { color: var(--green); }
+.timeline .tl-kind-message { color: var(--amber); }
+.timeline .tl-kind-debug { color: var(--amber); }
+.timeline .tl-kind-server { color: var(--muted); }
+
+/* ---------- provider card health ring ---------- */
+.pc-health .dot { width: 6px; height: 6px; }
+
+/* ---------- drawer-open: overlay above topbar on mobile ---------- */
+@media (max-width: 900px) {
+  .tb-cmdk {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  .tb-cmdk .meta-label { display: none; }
+  .topbar-cmdk-main { display: none; }
+}
+
+/* keep text selection warm on dark console */
+.console ::selection { background: rgba(217, 119, 87, 0.4); color: #fff; }

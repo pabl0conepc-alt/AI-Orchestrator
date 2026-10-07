@@ -2,169 +2,279 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0a0e17" />
-  <title>AI Orchestrator — Programming AI Platform</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#FAF9F5" />
+  <title>AI Orchestrator</title>
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141413'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23D97757'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23FAF9F5' stroke-width='1.4' stroke-dasharray='38 2'/%3E%3C/svg%3E" />
 </head>
 <body>
-  <div class="app">
-    <aside class="rail">
-      <div class="brand"><span class="logo">◈</span><div><b>AI ORCHESTRATOR</b><small data-i18n="brand.sub">coding intelligence platform</small></div></div>
-      <nav class="nav" id="nav">
-        <button class="nav-item active" data-view="chat"><i>💬</i><span data-i18n="nav.chat">Chat</span></button>
-        <button class="nav-item" data-view="hive"><i>🧠</i><span data-i18n="nav.hive">Hive Mind</span></button>
-        <button class="nav-item" data-view="files"><i>🗂</i><span data-i18n="nav.files">Files</span></button>
-        <button class="nav-item" data-view="terminal"><i>⌨</i><span data-i18n="nav.terminal">Terminal</span></button>
-        <button class="nav-item" data-view="git"><i>⑂</i><span data-i18n="nav.git">Git</span></button>
-        <button class="nav-item" data-view="providers"><i>🔌</i><span data-i18n="nav.providers">Providers</span></button>
-        <button class="nav-item" data-view="runs"><i>🗃</i><span data-i18n="nav.runs">Runs</span></button>
-        <button class="nav-item" data-view="settings"><i>⚙</i><span data-i18n="nav.settings">Settings</span></button>
-      </nav>
-      <div class="rail-bottom">
-        <div class="health-mini">
-          <span class="dot" id="statusDot"></span><span id="statusText" data-i18n="status.connecting">connecting…</span>
+  <div class="app" id="app">
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar" id="sidebar" aria-label="Primary">
+      <div class="brand">
+        <span id="brand-mark">
+          <svg class="brand-mark" width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="2.1" fill="currentColor"/>
+            <circle class="orbit" cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="46 1.2" opacity="0.85"/>
+            <circle class="orbit2" cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="1" stroke-dasharray="10 6" opacity="0.45"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <div class="brand-name" id="brand-name">AI Orchestrator</div>
+          <div class="brand-sub" id="brand-sub">Multi-model intelligence console</div>
         </div>
-        <div class="ws-mini" id="wsPath">—</div>
+      </div>
+
+      <nav class="nav" id="nav" aria-label="Views">
+        <span class="nav-indicator" id="nav-indicator"></span>
+        <button class="nav-item active" data-view="chat" type="button"><span class="nav-ico" data-ico="chat"></span><span class="nav-label">Chat</span></button>
+        <button class="nav-item" data-view="hive" type="button"><span class="nav-ico" data-ico="hive"></span><span class="nav-label">Hive Mind</span></button>
+        <button class="nav-item" data-view="files" type="button"><span class="nav-ico" data-ico="files"></span><span class="nav-label">Files</span></button>
+        <button class="nav-item" data-view="terminal" type="button"><span class="nav-ico" data-ico="terminal"></span><span class="nav-label">Terminal</span></button>
+        <button class="nav-item" data-view="git" type="button"><span class="nav-ico" data-ico="git"></span><span class="nav-label">Git</span></button>
+
+        <div class="nav-section meta-label" data-i18n="nav.workspace">Workspace</div>
+        <button class="nav-item" data-view="providers" type="button"><span class="nav-ico" data-ico="providers"></span><span class="nav-label">Providers</span></button>
+        <button class="nav-item" data-view="runs" type="button"><span class="nav-ico" data-ico="runs"></span><span class="nav-label">Runs</span></button>
+        <button class="nav-item" data-view="settings" type="button"><span class="nav-ico" data-ico="settings"></span><span class="nav-label">Settings</span></button>
+      </nav>
+
+      <div class="nav-section" style="margin-top:auto">
+        <button class="btn btn-primary" id="nav-new-task" type="button" style="width:100%"></button>
+      </div>
+
+      <div class="conv-list" id="conv-list" aria-label="Recent tasks"></div>
+
+      <div class="sidebar-foot">
+        <div class="status-card">
+          <span class="dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">connecting</span>
+          <span class="dot degraded" id="hud-dot" style="display:none"></span>
+        </div>
+        <div class="ws-path" id="ws-path">—</div>
       </div>
     </aside>
+    <div class="drawer-overlay" id="drawer-overlay"></div>
 
-    <main class="main">
+    <!-- ================= MAIN ================= -->
+    <div class="main">
       <header class="topbar">
         <div class="tb-left">
-          <h1 id="viewTitle">Chat</h1>
-          <span class="chip" id="projectChip">…</span>
+          <button class="icon-btn tb-menu" id="tb-menu" aria-label="Menu"><span id="tb-menu-icon"></span></button>
+          <h1 class="tb-title" id="view-title">Chat</h1>
+          <span class="tb-sub" id="topbar-sub"></span>
         </div>
         <div class="tb-right">
-          <label class="field"><span data-i18n="top.mode">Mode</span>
-            <select id="modeSelect">
-              <option value="normal" data-i18n="mode.normal">Normal</option>
-              <option value="fallback" data-i18n="mode.fallback">Fallback</option>
-              <option value="auto" data-i18n="mode.auto">Auto</option>
-              <option value="multi-agent" data-i18n="mode.multiAgent">Multi-Agent</option>
-              <option value="hive" selected data-i18n="mode.hive">Hive Mind</option>
-              <option value="super" data-i18n="mode.super">Super Mode</option>
-              <option value="build" data-i18n="mode.build">Build</option>
-              <option value="debug" data-i18n="mode.debug">Debug</option>
-              <option value="review" data-i18n="mode.review">Review</option>
-              <option value="custom" data-i18n="mode.custom">Custom</option>
-            </select>
+          <button class="tb-cmdk" id="topbar-cmdk" type="button"></button>
+          <span class="tools-sep"></span>
+          <label class="tb-label" data-tip="Code intelligence">
+            <button class="seg on" id="code-toggle" type="button" aria-pressed="true"><span class="seg-dot"></span>CODE</button>
           </label>
-          <label class="field"><span data-i18n="top.provider">Provider</span><select id="providerSelect"></select></label>
-          <label class="field wide"><span data-i18n="top.model">Model</span><input id="modelInput" placeholder="auto / provider:model" /></label>
-          <label class="field"><span data-i18n="top.language">Language</span>
-            <select id="langSelect">
-              <option value="en">English</option>
-              <option value="pt">Português</option>
-              <option value="es">Español</option>
-            </select>
-          </label>
-          <button id="codeToggle" class="toggle on" data-i18n-title="top.code" title="Code intelligence">CODE</button>
+          <select class="select select-lang" id="lang-select" aria-label="Language">
+            <option value="en">EN</option><option value="pt">PT</option><option value="es">ES</option>
+          </select>
         </div>
       </header>
 
-      <!-- CHAT -->
-      <section class="view active" id="view-chat">
-        <div class="chat" id="chat"></div>
-        <div class="composer-wrap">
-          <div class="composer-hints"><span id="modeHint" data-i18n="hint.hive"></span></div>
-          <form class="composer" id="composer">
-            <textarea id="input" rows="1" data-i18n-placeholder="chat.placeholder" placeholder="Describe the task…"></textarea>
-            <button class="send" type="submit" title="Send">➤</button>
-          </form>
-          <div class="hint" data-i18n="chat.hint"></div>
-        </div>
-      </section>
+      <div class="views" id="views">
+        <!-- ============ CHAT ============ -->
+        <section class="view active" id="view-chat" data-view="chat">
+          <div class="chat-view">
+            <div class="chat-scroll">
+              <div class="chat-empty" id="hero-empty">
+                <div class="hero-orbit">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                    <circle cx="24" cy="24" r="4.2" fill="currentColor"/>
+                    <circle class="orbit" cx="24" cy="24" r="15" stroke="currentColor" stroke-width="1.6" stroke-dasharray="88 2.4" opacity="0.85"/>
+                    <circle class="orbit2" cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.1" stroke-dasharray="22 12" opacity="0.45"/>
+                  </svg>
+                </div>
+                <h1 id="hero-title">Where intelligence<br/>works together.</h1>
+                <p id="hero-sub">Describe a task. The Master plans it, specialized agents execute in parallel across your providers, and the result is synthesized into one answer.</p>
+                <div class="hero-chips" id="hero-chips"></div>
+              </div>
+              <div class="chat-inner"><div id="chat" aria-live="polite"></div>
+                <div id="pipeline-host"></div>
+              </div>
+            </div>
 
-      <!-- HIVE -->
-      <section class="view" id="view-hive">
-        <div class="hive-layout">
-          <div class="panel">
-            <div class="panel-head"><h2 data-i18n="hive.agents">Agents</h2><span class="chip" id="hiveDiversity">—</span></div>
-            <div id="agentGrid" class="agent-grid"><div class="empty" data-i18n="hive.empty"></div></div>
+            <div class="composer-zone">
+              <div class="mode-hint" id="mode-hint"></div>
+              <form class="composer" id="composer" autocomplete="off">
+                <div class="attach-row" id="attach-row"></div>
+                <div class="composer-input">
+                  <button class="icon-btn" id="attach-btn" type="button" data-tip="Attach workspace file" aria-label="Attach file"></button>
+                  <textarea class="composer-textarea" id="composer-textarea" rows="1" placeholder="Describe the task…"></textarea>
+                  <button class="composer-send" id="composer-send" type="button" aria-label="Send"></button>
+                </div>
+                <div class="composer-tools">
+                  <span class="meta-label" data-i18n="top.mode">Mode</span>
+                  <select class="select" id="mode-select" aria-label="Orchestration mode"></select>
+                  <select class="select" id="provider-select" aria-label="Provider"></select>
+                  <input class="input model-input" id="model-input" type="text" placeholder="auto / provider:model" spellcheck="false"/>
+                  <span class="tools-sep"></span>
+                  <span class="composer-hint ellipsis" id="composer-hint">Enter sends · Shift+Enter breaks line</span>
+                </div>
+              </form>
+            </div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><h2 data-i18n="hive.timeline">Activity timeline</h2><button class="mini" id="clearTimeline" data-i18n="hive.clear">clear</button></div>
-            <div id="timeline" class="timeline"></div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- FILES -->
-      <section class="view" id="view-files">
-        <div class="files-layout">
-          <div class="panel file-tree-panel">
-            <div class="panel-head"><h2 data-i18n="files.workspace">Workspace</h2><button class="mini" id="refreshFiles" data-i18n="files.refresh">refresh</button></div>
-            <div id="fileTree" class="file-tree"></div>
+        <!-- ============ HIVE ============ -->
+        <section class="view" id="view-hive" data-view="hive">
+          <div class="view-inner">
+            <div class="hive-layout">
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 data-i18n="hive.agents">Agent squad</h2>
+                  <div class="hive-diversity" id="hive-diversity"></div>
+                </div>
+                <div class="agent-grid" id="agent-grid"></div>
+                <div class="hive-empty" id="hive-empty">
+                  <div class="hero-orbit">
+                    <svg width="40" height="40" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                      <circle cx="24" cy="24" r="4.2" fill="currentColor"/>
+                      <circle class="orbit" cx="24" cy="24" r="15" stroke="currentColor" stroke-width="1.6" stroke-dasharray="88 2.4" opacity="0.85"/>
+                      <circle class="orbit2" cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.1" stroke-dasharray="22 12" opacity="0.45"/>
+                    </svg>
+                  </div>
+                  <h1>No run yet</h1>
+                  <p>Send a task in the chat (Hive, Build or Multi-Agent mode) and live agents appear here.</p>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 data-i18n="hive.timeline">Activity</h2>
+                  <button class="btn btn-ghost btn-sm" id="clear-timeline" type="button">Clear</button>
+                </div>
+                <div class="timeline" id="timeline"></div>
+              </div>
+            </div>
           </div>
-          <div class="panel editor-panel">
-            <div class="panel-head"><h2 id="editorPath" data-i18n="files.none">No file open</h2><div><button class="mini" id="saveFile" data-i18n="files.save">save</button></div></div>
-            <textarea id="editor" class="editor" spellcheck="false" data-i18n-placeholder="files.placeholder" placeholder="Select a file"></textarea>
+        </section>
+
+        <!-- ============ FILES ============ -->
+        <section class="view" id="view-files" data-view="files">
+          <div class="files-layout">
+            <div class="panel file-tree-panel">
+              <div class="panel-head">
+                <h2 data-i18n="files.workspace">Workspace</h2>
+                <button class="icon-btn" id="refresh-files" type="button" aria-label="Refresh"></button>
+              </div>
+              <div class="file-tree" id="file-tree" role="tree"></div>
+            </div>
+            <div class="panel editor-panel">
+              <div class="panel-head">
+                <span class="dirty-dot" id="dirty-dot"></span>
+                <span class="editor-path" id="editor-path">No file open</span>
+                <span class="ac-agent" id="editor-dirty"></span>
+                <button class="btn btn-ghost btn-sm" id="save-file" type="button">Save</button>
+              </div>
+              <div class="editor-body">
+                <div class="editor-gutter" id="editor-gutter"></div>
+                <textarea class="editor" id="editor" spellcheck="false" placeholder="Select a file to view or edit"></textarea>
+              </div>
+              <div class="editor-status"><span id="editor-stats"></span></div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- TERMINAL -->
-      <section class="view" id="view-terminal">
-        <div class="panel terminal-panel">
-          <div class="panel-head"><h2 data-i18n="term.title">Controlled terminal</h2><span class="chip" data-i18n="term.note">allowlist • no shell</span></div>
-          <pre id="termOut" class="terminal" data-i18n="term.ready"></pre>
-          <form id="termForm" class="term-input"><span class="prompt">$</span><input id="termCmd" placeholder="npm test" autocomplete="off" /><button type="submit" data-i18n="term.run">run</button></form>
-        </div>
-      </section>
-
-      <!-- GIT -->
-      <section class="view" id="view-git">
-        <div class="panel">
-          <div class="panel-head"><h2 data-i18n="git.title">Git</h2></div>
-          <div class="btn-row">
-            <button class="mini" data-git="git_status" data-i18n="git.status">status</button>
-            <button class="mini" data-git="git_diff" data-i18n="git.diff">diff</button>
-            <button class="mini" data-git="git_log" data-i18n="git.log">log</button>
-            <button class="mini" data-git="git_branches" data-i18n="git.branches">branches</button>
-            <button class="mini" data-git="git_stash_list" data-i18n="git.stash">stash</button>
-            <button class="mini" data-git="git_change_summary" data-i18n="git.summary">change summary</button>
-            <button class="mini" data-git="git_commit_suggest" data-i18n="git.suggest">suggest commit</button>
-            <button class="mini" data-git="git_snapshot" data-i18n="git.snapshot">snapshot</button>
+        <!-- ============ TERMINAL ============ -->
+        <section class="view" id="view-terminal" data-view="terminal">
+          <div class="term-panel panel">
+            <div class="panel-head">
+              <h2 data-i18n="term.title">Controlled terminal</h2>
+              <span class="chip" data-i18n="term.note">allowlist · no shell</span>
+            </div>
+            <pre class="console" id="term-out"></pre>
+            <form class="term-input" id="term-form">
+              <span class="term-prompt">$</span>
+              <input id="term-cmd" placeholder="npm test" autocomplete="off" spellcheck="false"/>
+              <button class="btn btn-ghost btn-sm" type="submit">Run</button>
+            </form>
           </div>
-          <pre id="gitOut" class="terminal" data-i18n="git.choose" ></pre>
-        </div>
-      </section>
+        </section>
 
-      <!-- PROVIDERS -->
-      <section class="view" id="view-providers">
-        <div class="panel">
-          <div class="panel-head"><h2 data-i18n="providers.title">Provider Manager</h2><span class="chip" id="providerCount">—</span></div>
-          <div id="providerGrid" class="provider-grid"></div>
-        </div>
-      </section>
-
-      <!-- RUNS -->
-      <section class="view" id="view-runs">
-        <div class="panel">
-          <div class="panel-head"><h2 data-i18n="runs.title">Runs</h2><button class="mini" id="refreshRuns" data-i18n="runs.refresh">refresh</button></div>
-          <div id="runsList" class="runs-list"></div>
-        </div>
-      </section>
-
-      <!-- SETTINGS -->
-      <section class="view" id="view-settings">
-        <div class="hive-layout">
-          <div class="panel">
-            <div class="panel-head"><h2 data-i18n="settings.permissions">Tool permissions</h2></div>
-            <div id="permList" class="perm-list"></div>
+        <!-- ============ GIT ============ -->
+        <section class="view" id="view-git" data-view="git">
+          <div class="view-inner" style="height:100%">
+            <div class="panel term-panel" style="position:absolute;inset:0">
+              <div class="panel-head"><h2 data-i18n="git.title">Git</h2></div>
+              <div class="git-actions">
+                <button class="btn btn-sm" data-git="git_status" type="button">Status</button>
+                <button class="btn btn-sm" data-git="git_diff" type="button">Diff</button>
+                <button class="btn btn-sm" data-git="git_log" type="button">Log</button>
+                <button class="btn btn-sm" data-git="git_branches" type="button">Branches</button>
+                <button class="btn btn-sm" data-git="git_stash_list" type="button">Stash</button>
+                <button class="btn btn-sm" data-git="git_change_summary" type="button">Change summary</button>
+                <button class="btn btn-sm" data-git="git_commit_suggest" type="button">Suggest commit</button>
+                <button class="btn btn-sm" data-git="git_snapshot" type="button">Snapshot</button>
+              </div>
+              <pre class="console" id="git-out" style="border-radius:0"></pre>
+            </div>
           </div>
-          <div class="panel">
-            <div class="panel-head"><h2 data-i18n="settings.matrix">Capability Matrix</h2></div>
-            <div id="matrixWrap" class="matrix-wrap"></div>
+        </section>
+
+        <!-- ============ PROVIDERS ============ -->
+        <section class="view" id="view-providers" data-view="providers">
+          <div class="view-inner">
+            <div class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="providers.title">Provider manager</h2>
+                <span id="provider-count"></span>
+              </div>
+              <div class="provider-grid" id="provider-grid"></div>
+            </div>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+
+        <!-- ============ RUNS ============ -->
+        <section class="view" id="view-runs" data-view="runs">
+          <div class="view-inner">
+            <div class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="runs.title">Runs</h2>
+                <button class="btn btn-ghost btn-sm" id="refresh-runs" type="button">Refresh</button>
+              </div>
+              <div class="runs-list" id="runs-list"></div>
+              <div class="hive-empty" id="runs-empty" style="display:none">
+                <h1>No runs recorded</h1>
+                <p>Completed tasks are remembered here with their agents and outcomes.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ SETTINGS ============ -->
+        <section class="view" id="view-settings" data-view="settings">
+          <div class="view-inner">
+            <div class="settings-layout">
+              <div class="panel">
+                <div class="panel-head"><h2 data-i18n="settings.permissions">Tool permissions</h2><span id="prompts-ver" class="prompts-ver"></span></div>
+                <div class="perm-list" style="padding:var(--s-4) var(--s-5)" id="perm-list"></div>
+              </div>
+              <div class="panel">
+                <div class="panel-head"><h2 data-i18n="settings.matrix">Capability matrix</h2></div>
+                <div class="matrix-wrap" style="padding:var(--s-4) var(--s-5)" id="matrix-wrap"></div>
+              </div>
+              <div class="panel project-memory">
+                <div class="panel-head"><h2 data-i18n="settings.project">Project memory</h2></div>
+                <div style="padding:var(--s-4) var(--s-5)" id="project-memory"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- busy bar (agents working) -->
+      <div class="busybar" id="busybar">
+        <span class="loader-dots"><i></i><i></i><i></i></span>
+        <span id="busybar-count">0 agents working</span>
+      </div>
+    </div>
   </div>
 
-  <div id="toast" class="toast"></div>
-  <script src="/i18n.js"></script>
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
