@@ -1,0 +1,76 @@
+{
+  "_comment": "Matriz de capacidades por família/modelo. Cada perfil declara o que o modelo é bom. O ranking usa estes valores para escolher o melhor recurso por tipo de tarefa. Ajuste livremente.",
+  "default": {
+    "family": "generic",
+    "size": "medium",
+    "capabilities": { "coding": 0.6, "reasoning": 0.6, "speed": 0.6, "context": 0.6, "tools": 0.7, "vision": 0, "security": 0.6, "research": 0.6, "writing": 0.6 }
+  },
+  "profiles": [
+    {
+      "match": "gpt-oss",
+      "family": "gpt-oss",
+      "size": "medium",
+      "capabilities": { "coding": 0.8, "reasoning": 0.85, "speed": 0.75, "context": 0.7, "tools": 0.85, "vision": 0, "security": 0.7, "research": 0.7, "writing": 0.7 }
+    },
+    {
+      "match": "(llama-?3\\.?3|llama-3\\.3)",
+      "family": "llama",
+      "size": "large",
+      "capabilities": { "coding": 0.78, "reasoning": 0.74, "speed": 0.7, "context": 0.75, "tools": 0.8, "vision": 0, "security": 0.65, "research": 0.72, "writing": 0.75 }
+    },
+    {
+      "match": "llama-?3\\.?1-8b|llama3\\.1-8b",
+      "family": "llama",
+      "size": "small",
+      "capabilities": { "coding": 0.5, "reasoning": 0.45, "speed": 0.95, "context": 0.5, "tools": 0.6, "vision": 0, "security": 0.4, "research": 0.45, "writing": 0.55 }
+    },
+    {
+      "match": "deepseek-(v3|chat)",
+      "family": "deepseek",
+      "size": "large",
+      "capabilities": { "coding": 0.9, "reasoning": 0.8, "speed": 0.6, "context": 0.8, "tools": 0.8, "vision": 0, "security": 0.72, "research": 0.75, "writing": 0.7 }
+    },
+    {
+      "match": "deepseek-(r1|reasoner)",
+      "family": "deepseek",
+      "size": "large",
+      "capabilities": { "coding": 0.85, "reasoning": 0.95, "speed": 0.35, "context": 0.85, "tools": 0.7, "vision": 0, "security": 0.8, "research": 0.85, "writing": 0.65 }
+    },
+    {
+      "match": "qwen.*coder",
+      "family": "qwen",
+      "size": "large",
+      "capabilities": { "coding": 0.92, "reasoning": 0.7, "speed": 0.65, "context": 0.8, "tools": 0.8, "vision": 0, "security": 0.6, "research": 0.6, "writing": 0.65 }
+    },
+    {
+      "match": "qwen",
+      "family": "qwen",
+      "size": "large",
+      "capabilities": { "coding": 0.8, "reasoning": 0.78, "speed": 0.65, "context": 0.8, "tools": 0.75, "vision": 0, "security": 0.6, "research": 0.7, "writing": 0.7 }
+    },
+    {
+      "match": "gemini.*pro",
+      "family": "gemini",
+      "size": "large",
+      "capabilities": { "coding": 0.85, "reasoning": 0.92, "speed": 0.5, "context": 0.95, "tools": 0.85, "vision": 1, "security": 0.78, "research": 0.9, "writing": 0.85 }
+    },
+    {
+      "match": "gemini",
+      "family": "gemini",
+      "size": "medium",
+      "capabilities": { "coding": 0.8, "reasoning": 0.8, "speed": 0.85, "context": 0.9, "tools": 0.82, "vision": 1, "security": 0.7, "research": 0.8, "writing": 0.8 }
+    },
+    {
+      "match": "codestral|mistral-(large|small)|mistral",
+      "family": "mistral",
+      "size": "medium",
+      "capabilities": { "coding": 0.82, "reasoning": 0.72, "speed": 0.8, "context": 0.7, "tools": 0.78, "vision": 0, "security": 0.68, "research": 0.68, "writing": 0.72 }
+    },
+    {
+      "match": "gpt-4o",
+      "family": "gpt",
+      "size": "large",
+      "capabilities": { "coding": 0.88, "reasoning": 0.85, "speed": 0.7, "context": 0.85, "tools": 0.9, "vision": 1, "security": 0.75, "research": 0.82, "writing": 0.85 }
+    }
+  ]
+}
