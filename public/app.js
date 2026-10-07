@@ -1,5 +1,7 @@
 'use strict';
 
+const t = (key, vars) => (window.I18n ? window.I18n.t(key, vars) : key);
+
 /* ----------------------------- state ----------------------------- */
 const state = {
   view: 'chat',
@@ -31,11 +33,11 @@ async function api(path, options) {
 function postJson(path, body) { return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
 
 function toast(message, isError) {
-  const t = $('#toast');
-  t.textContent = message;
-  t.className = `toast show${isError ? ' err' : ''}`;
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.className = 'toast'; }, 3200);
+  const node = $('#toast');
+  node.textContent = message;
+  node.className = `toast show${isError ? ' err' : ''}`;
+  clearTimeout(node._timer);
+  node._timer = setTimeout(() => { node.className = 'toast'; }, 3200);
 }
 
 /* ----------------------------- markdown ----------------------------- */
@@ -58,10 +60,9 @@ function formatText(text) {
       .replace(/\n/g, '<br>');
     if (parts[i + 2] !== undefined) {
       const lang = escapeHtml(parts[i + 1] || '');
-      const code = parts[i + 2];
       out += `<div class="code-wrap">${lang ? `<span class="lang-tag">${lang}</span>` : ''}`
-        + `<button class="mini code-copy" data-copy>copiar</button>`
-        + `<code class="code-block">${code}</code></div>`;
+        + `<button class="mini code-copy" data-copy>${escapeHtml(t('files.save') === 'salvar' ? 'copiar' : 'copy')}</button>`
+        + `<code class="code-block">${parts[i + 2]}</code></div>`;
     }
   }
   return out;
@@ -71,7 +72,7 @@ function formatText(text) {
 function currentConv() { return state.conversations.find((c) => c.id === state.currentId); }
 
 function newConversation() {
-  const conv = { id: crypto.randomUUID(), title: 'Nova tarefa', messages: [] };
+  const conv = { id: crypto.randomUUID(), title: t('chat.newTask'), titled: false, messages: [] };
   state.conversations.unshift(conv);
   state.currentId = conv.id;
   save('ai-orch-conversations', state.conversations);
@@ -83,12 +84,13 @@ function renderChat() {
   const conv = currentConv();
   chat.innerHTML = '';
   if (!conv || !conv.messages.length) {
-    chat.innerHTML = '<div class="empty">Descreva uma tarefa e escolha um modo (Hive Mind recomendado).</div>';
+    chat.innerHTML = `<div class="empty">${escapeHtml(t('chat.empty'))}</div>`;
     return;
   }
   for (const m of conv.messages) {
     const wrap = el('div', `msg ${m.role}`);
-    wrap.innerHTML = `<div class="avatar">${m.role === 'user' ? 'YOU' : 'AI'}</div>`
+    const who = m.role === 'user' ? t('chat.you') : t('chat.ai');
+    wrap.innerHTML = `<div class="avatar">${escapeHtml(who)}</div>`
       + `<div><div class="bubble">${m.pending ? '<span class="thinking"><span></span><span></span><span></span></span>' : formatText(m.content)}</div>`
       + `<div class="meta">${escapeHtml(m.meta || '')}</div></div>`;
     chat.appendChild(wrap);
@@ -100,8 +102,8 @@ async function sendMessage(text) {
   if (!currentConv()) newConversation();
   const conv = currentConv();
   conv.messages.push({ role: 'user', content: text });
-  if (conv.title === 'Nova tarefa') conv.title = text.slice(0, 46);
-  const placeholder = { role: 'assistant', content: '', meta: 'orquestrando…', pending: true };
+  if (!conv.titled) { conv.title = text.slice(0, 46); conv.titled = true; }
+  const placeholder = { role: 'assistant', content: '', meta: t('meta.orchestrating'), pending: true };
   conv.messages.push(placeholder);
   save('ai-orch-conversations', state.conversations);
   renderChat();
@@ -119,18 +121,17 @@ async function sendMessage(text) {
 
   const streaming = ['normal', 'fallback', 'auto'].includes(mode);
   try {
-    if (streaming) {
-      await streamChat(payload, placeholder, conv);
-    } else {
+    if (streaming) await streamChat(payload, placeholder);
+    else {
       const data = await postJson('/api/chat', payload);
       placeholder.pending = false;
-      placeholder.content = data.text || '(sem resposta)';
+      placeholder.content = data.text || '(empty)';
       placeholder.meta = metaFor(data);
     }
   } catch (error) {
     placeholder.pending = false;
-    placeholder.content = `Erro: ${error.message}`;
-    placeholder.meta = 'falha do orquestrador';
+    placeholder.content = `Error: ${error.message}`;
+    placeholder.meta = 'failed';
     toast(error.message, true);
   }
   save('ai-orch-conversations', state.conversations);
@@ -141,15 +142,16 @@ async function sendMessage(text) {
 function metaFor(data) {
   const bits = [];
   if (data.provider) bits.push(`${data.provider} · ${data.model}`);
-  if (data.fallback) bits.push('fallback');
-  if (data.agentCount) bits.push(`${data.agentCount} agentes`);
-  if (data.synthesized) bits.push('síntese do Master');
-  if (data.diversity) bits.push(`diversidade ${data.diversity.providerDiversity}p/${data.diversity.familyDiversity}f`);
+  if (data.fallback) bits.push(t('meta.fallback'));
+  if (data.agentCount) bits.push(t('meta.agents', { n: data.agentCount }));
+  if (data.synthesized) bits.push(t('meta.synthesis'));
+  if (data.diversity) bits.push(t('meta.diversity', { p: data.diversity.providerDiversity, f: data.diversity.familyDiversity }));
+  if (data.mode) bits.push(data.mode);
   if (data.durationMs) bits.push(`${(data.durationMs / 1000).toFixed(1)}s`);
   return bits.join(' · ');
 }
 
-async function streamChat(payload, placeholder, conv) {
+async function streamChat(payload, placeholder) {
   const res = await fetch('/api/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const reader = res.body.getReader();
@@ -164,29 +166,28 @@ async function streamChat(payload, placeholder, conv) {
     const blocks = buffer.split('\n\n');
     buffer = blocks.pop() || '';
     for (const block of blocks) {
-      const evMatch = block.match(/^event:\s*(.+)$/m);
-      const dataMatch = block.match(/^data:\s*(.+)$/m);
-      if (!evMatch || !dataMatch) continue;
-      const type = evMatch[1].trim();
-      let data; try { data = JSON.parse(dataMatch[1]); } catch { continue; }
-      if (type === 'delta') {
+      const ev = block.match(/^event:\s*(.+)$/m);
+      const dm = block.match(/^data:\s*(.+)$/m);
+      if (!ev || !dm) continue;
+      let data; try { data = JSON.parse(dm[1]); } catch { continue; }
+      if (ev[1].trim() === 'delta') {
         acc += data.delta || '';
         placeholder.pending = false;
         placeholder.content = acc;
-        placeholder.meta = 'streaming…';
+        placeholder.meta = t('meta.streaming');
         renderChat();
-      } else if (type === 'done') {
+      } else if (ev[1].trim() === 'done') {
         placeholder.pending = false;
         placeholder.content = data.text || acc;
         finalMeta = metaFor(data);
-      } else if (type === 'error') {
-        throw new Error(data.error || 'erro no streaming');
+      } else if (ev[1].trim() === 'error') {
+        throw new Error(data.error || 'stream error');
       }
     }
   }
   placeholder.pending = false;
-  placeholder.content = placeholder.content || acc || '(sem resposta)';
-  placeholder.meta = finalMeta || 'concluído';
+  placeholder.content = placeholder.content || acc || '(empty)';
+  placeholder.meta = finalMeta || t('meta.done');
 }
 
 /* ----------------------------- SSE timeline / agents ----------------------------- */
@@ -196,11 +197,11 @@ function connectEvents() {
     let event; try { event = JSON.parse(message.data); } catch { return; }
     handleEvent(event);
   });
-  source.onerror = () => setStatus(false, 'reconectando…');
+  source.onerror = () => setStatus(false, t('status.offline'));
   source.onopen = () => refreshStatus();
 }
 
-function timeOf(ts) { return new Date(ts).toLocaleTimeString('pt-BR', { hour12: false }); }
+function timeOf(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour12: false }); }
 
 function handleEvent(event) {
   const kind = String(event.type || '').split('.')[0];
@@ -211,20 +212,19 @@ function handleEvent(event) {
     renderAgents();
   }
   if (event.type === 'agent.status') {
-    const a = findAgentByName(event.agent); if (a) { a.status = event.status === 'error' ? 'failed' : 'running'; a.model = event.model || a.model; renderAgents(); }
+    const a = findAgentByName(event.agent);
+    if (a) { a.status = event.status === 'error' ? 'failed' : 'running'; a.model = event.model || a.model; renderAgents(); }
   }
   if (event.type === 'agent.done') {
-    const a = state.agents.get(event.taskId); if (a) { a.status = event.ok ? 'done' : 'failed'; a.durationMs = event.durationMs; a.error = event.error; renderAgents(); }
+    const a = state.agents.get(event.taskId);
+    if (a) { a.status = event.ok ? 'done' : 'failed'; a.durationMs = event.durationMs; a.error = event.error; renderAgents(); }
   }
-  if (event.type === 'hive.models') {
-    state.diversity = event.diversity;
-    renderAgents();
-  }
+  if (event.type === 'hive.models' || event.type === 'super.models') { state.diversity = event.diversity; renderAgents(); }
   if (event.type === 'task.plan') {
     state.agents.clear();
-    (event.tasks || []).forEach((t) => state.agents.set(t.id, { id: t.id, role: t.role, title: t.title, status: 'pending', dependsOn: t.dependsOn }));
+    (event.tasks || []).forEach((task) => state.agents.set(task.id, { id: task.id, role: task.role, title: task.title, status: 'pending', dependsOn: task.dependsOn }));
     renderAgents();
-    toast(`Master planejou ${event.tasks.length} subtarefas (${event.source}).`);
+    toast(t('toast.planned', { n: event.tasks.length, source: event.source }));
   }
 }
 
@@ -232,11 +232,10 @@ function findAgentByName(name) { for (const a of state.agents.values()) if (a.ag
 
 function appendTimeline(event, kind) {
   const box = $('#timeline');
-  if (box.querySelector('.empty')) box.innerHTML = '';
+  if (!box.querySelector('.empty')) { /* keep */ }
   const row = el('div', 'tl-row');
-  const label = describeEvent(event);
   row.innerHTML = `<div class="tl-time">${timeOf(event.ts)}</div>`
-    + `<div class="tl-body"><span class="tl-kind ${kind}">${kind}</span>${label}</div>`;
+    + `<div class="tl-body"><span class="tl-kind ${kind}">${kind}</span>${describeEvent(event)}</div>`;
   box.appendChild(row);
   box.scrollTop = box.scrollHeight;
   const rows = box.querySelectorAll('.tl-row');
@@ -246,20 +245,22 @@ function appendTimeline(event, kind) {
 function describeEvent(e) {
   const esc = escapeHtml;
   switch (e.type) {
-    case 'task.start': return `<b>Master</b> iniciou tarefa no modo ${esc(e.mode)}`;
-    case 'task.plan': return `<b>Master</b> planejou: ${esc(e.summary || '')}`;
-    case 'task.done': return `<b>Master</b> finalizou (${e.agents} agentes)`;
-    case 'hive.models': return `Modelos atribuídos — diversidade ${e.diversity?.providerDiversity}p/${e.diversity?.familyDiversity}f`;
-    case 'agent.start': return `<b>${esc(e.agent)}</b> iniciou "${esc(e.title || e.taskId)}" em ${esc(e.provider)}:${esc(e.model || '?')}`;
+    case 'task.start': return `<b>Master</b> started task (${esc(e.mode)})`;
+    case 'task.plan': return `<b>Master</b> planned: ${esc(e.summary || '')}`;
+    case 'task.done': return `<b>Master</b> finished (${e.agents} agents)`;
+    case 'hive.models': return `Models assigned — diversity ${e.diversity?.providerDiversity}p/${e.diversity?.familyDiversity}f`;
+    case 'super.models': return `Super Mode models — diversity ${e.diversity?.providerDiversity}p/${e.diversity?.familyDiversity}f`;
+    case 'super.consensus': return `Consensus — ${e.critiques} critiques, ${e.disagreements} with disagreement`;
+    case 'agent.start': return `<b>${esc(e.agent)}</b> started "${esc(e.title || e.taskId)}" on ${esc(e.provider)}:${esc(e.model || '?')}`;
     case 'agent.status': return `<b>${esc(e.agent)}</b> ${esc(e.status)}${e.model ? ` · ${esc(e.model)}` : ''}`;
-    case 'agent.done': return e.ok ? `<b>${esc(e.agent)}</b> concluiu em ${(e.durationMs / 1000).toFixed(1)}s` : `<b>${esc(e.agent)}</b> falhou: ${esc(e.error || '')}`;
-    case 'tool.start': return `ferramenta <b>${esc(e.tool)}</b> iniciada`;
-    case 'tool.done': return `ferramenta <b>${esc(e.tool)}</b> ${e.ok ? 'ok' : 'falhou'} (${e.durationMs}ms)`;
+    case 'agent.done': return e.ok ? `<b>${esc(e.agent)}</b> finished in ${((e.durationMs || 0) / 1000).toFixed(1)}s` : `<b>${esc(e.agent)}</b> failed: ${esc(e.error || '')}`;
+    case 'tool.start': return `tool <b>${esc(e.tool)}</b> started`;
+    case 'tool.done': return `tool <b>${esc(e.tool)}</b> ${e.ok ? 'ok' : 'failed'} (${e.durationMs}ms)`;
     case 'message': return `<b>${esc(e.from)}</b> → <b>${esc(e.to)}</b> [${esc(e.type)}] ${esc(e.content || '')}`;
-    case 'debug.attempt': return `debug tentativa ${e.attempt}`;
-    case 'debug.fixing': return `debug corrigindo com ${esc(e.provider)}:${esc(e.model)}`;
-    case 'debug.done': return `debug ${e.ok ? 'convergiu' : 'não convergiu'}`;
-    case 'server.ready': return 'servidor pronto';
+    case 'debug.attempt': return `debug attempt ${e.attempt}`;
+    case 'debug.fixing': return `debug fixing with ${esc(e.provider)}:${esc(e.model)}`;
+    case 'debug.done': return `debug ${e.ok ? 'converged' : 'did not converge'}`;
+    case 'server.ready': return 'server ready';
     default: return esc(e.type);
   }
 }
@@ -267,20 +268,20 @@ function describeEvent(e) {
 /* ----------------------------- agents render ----------------------------- */
 function renderAgents() {
   const grid = $('#agentGrid');
-  if (!state.agents.size) { grid.innerHTML = '<div class="empty">Nenhuma execução ainda. Envie uma tarefa no chat no modo Hive/Build.</div>'; return; }
+  if (!state.agents.size) { grid.innerHTML = `<div class="empty">${escapeHtml(t('hive.empty'))}</div>`; return; }
   grid.innerHTML = '';
   for (const a of state.agents.values()) {
     const card = el('div', `agent-card ${a.status}`);
     const model = a.provider ? `${a.provider}:${a.model || '?'}` : (a.model || '—');
-    card.innerHTML = `<div class="ac-head"><span class="ac-role">${escapeHtml(a.agent || a.role || 'Agente')}</span><span class="ac-status ${a.status}">${statusLabel(a.status)}</span></div>`
+    card.innerHTML = `<div class="ac-head"><span class="ac-role">${escapeHtml(a.agent || a.role || t('agent.pending'))}</span><span class="ac-status ${a.status}">${escapeHtml(statusLabel(a.status))}</span></div>`
       + `<div class="ac-model">${escapeHtml(model)}</div>`
-      + `<div class="ac-task">${escapeHtml((a.title || a.role || ''))}${a.durationMs ? ` · ${(a.durationMs / 1000).toFixed(1)}s` : ''}</div>`
+      + `<div class="ac-task">${escapeHtml(a.title || a.role || '')}${a.durationMs ? ` · ${(a.durationMs / 1000).toFixed(1)}s` : ''}</div>`
       + (a.status === 'running' ? '<div class="progress"><i></i></div>' : '');
     grid.appendChild(card);
   }
-  if (state.diversity) $('#hiveDiversity').textContent = `diversidade: ${state.diversity.providerDiversity} providers · ${state.diversity.familyDiversity} famílias`;
+  if (state.diversity) $('#hiveDiversity').textContent = t('hive.diversity', { p: state.diversity.providerDiversity, f: state.diversity.familyDiversity });
 }
-function statusLabel(s) { return ({ running: 'executando', done: 'concluído', failed: 'falhou', pending: 'pendente' }[s]) || s; }
+function statusLabel(s) { return t(`state.${s === 'running' ? 'running' : s === 'done' ? 'done' : s === 'failed' ? 'failed' : 'pending'}`); }
 
 /* ----------------------------- files ----------------------------- */
 async function refreshFiles() {
@@ -288,7 +289,7 @@ async function refreshFiles() {
     const data = await api('/api/files?depth=4');
     const box = $('#fileTree');
     box.innerHTML = '';
-    if (!data.entries.length) { box.innerHTML = '<div class="empty">Workspace vazio.</div>'; return; }
+    if (!data.entries.length) { box.innerHTML = `<div class="empty">${escapeHtml(t('files.empty'))}</div>`; return; }
     for (const entry of data.entries) {
       const row = el('div', `ft-row ${entry.type === 'file' ? 'file' : ''}`);
       row.innerHTML = `<span>${entry.type === 'dir' ? '📁' : fileIcon(entry.path)}</span><span>${escapeHtml(entry.path)}</span>`
@@ -311,10 +312,10 @@ async function openFile(path) {
   } catch (error) { toast(error.message, true); }
 }
 async function saveFile() {
-  if (!state.openFile) return toast('Nenhum arquivo aberto.', true);
+  if (!state.openFile) return toast(t('toast.noFile'), true);
   try {
     await postJson('/api/file', { path: state.openFile, content: $('#editor').value });
-    toast(`Salvo: ${state.openFile}`);
+    toast(t('toast.saved', { path: state.openFile }));
   } catch (error) { toast(error.message, true); }
 }
 
@@ -324,18 +325,18 @@ async function runTerminal(command) {
   out.textContent += `\n$ ${command}\n`;
   try {
     const data = await postJson('/api/tools/run', { tool: 'run_command', params: { command, confirm: true } });
-    const text = data.stdout || data.stderr || data.error || '(sem saída)';
-    out.textContent += `${data.ok ? '✓' : '✗'} ${text}\n`;
-  } catch (error) { out.textContent += `erro: ${error.message}\n`; }
-  out.textContent += `---\n`;
+    out.textContent += `${data.ok ? '✓' : '✗'} ${data.stdout || data.stderr || data.error || '(no output)'}\n`;
+  } catch (error) { out.textContent += `error: ${error.message}\n`; }
+  out.textContent += '---\n';
   out.scrollTop = out.scrollHeight;
 }
 async function runGit(tool) {
   const out = $('#gitOut');
-  out.textContent = `Executando ${tool}…`;
+  out.textContent = `${tool}…`;
   try {
     const data = await postJson('/api/tools/run', { tool, params: {} });
-    out.textContent = `${data.ok ? '✓' : '✗'} ${data.stdout || data.stderr || data.error || '(sem saída)'}`;
+    const body = data.stdout || data.stderr || data.error || JSON.stringify(data, null, 2);
+    out.textContent = `${data.ok ? '✓' : '✗'} ${body}`;
   } catch (error) { out.textContent = error.message; }
 }
 
@@ -345,12 +346,12 @@ async function refreshProviders() {
     const providers = await api('/api/providers');
     state.providers = providers;
     const configured = providers.filter((p) => p.configured);
-    $('#providerSelect').innerHTML = configured.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('') || '<option value="">nenhum</option>';
-    setStatus(configured.length > 0, `${configured.length} providers`);
-    $('#providerCount').textContent = `${configured.length} configurados / ${providers.length}`;
+    $('#providerSelect').innerHTML = configured.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('') || '<option value="">—</option>';
+    setStatus(configured.length > 0, t('status.providers', { n: configured.length }));
+    $('#providerCount').textContent = t('providers.configured', { n: configured.length, m: providers.length });
     renderProviderGrid(providers);
     loadMatrix();
-  } catch (error) { setStatus(false, 'offline'); }
+  } catch { setStatus(false, t('status.offline')); }
 }
 
 function renderProviderGrid(providers) {
@@ -361,10 +362,10 @@ function renderProviderGrid(providers) {
     const stateClass = p.configured ? (health.state === 'degraded' ? 'warn' : health.state === 'offline' ? 'bad' : 'ok') : 'bad';
     const card = el('div', 'provider-card');
     card.innerHTML = `<div class="pc-top"><div><b>${escapeHtml(p.name)}</b><div class="id">${escapeHtml(p.id)}</div></div>`
-      + `<span class="pill ${stateClass}">${p.configured ? health.state || 'online' : 'sem chave'}</span></div>`
-      + `<div class="pc-meta"><span class="pill">${escapeHtml(p.transport)}</span><span class="pill">prioridade ${p.priority}</span>`
-      + `<span class="pill">${p.freePool ? 'gratuito' : 'pago'}</span><span class="pill">${health.avgLatencyMs ? health.avgLatencyMs + 'ms' : 'sem dados'}</span></div>`
-      + `<div class="id">modelo: ${escapeHtml(p.defaultModel)}</div>`
+      + `<span class="pill ${stateClass}">${p.configured ? escapeHtml(health.state || 'online') : 'no key'}</span></div>`
+      + `<div class="pc-meta"><span class="pill">${escapeHtml(p.transport)}</span><span class="pill">priority ${p.priority}</span>`
+      + `<span class="pill">${p.freePool ? 'free' : 'paid'}</span><span class="pill">${health.avgLatencyMs ? health.avgLatencyMs + 'ms' : 'no data'}</span></div>`
+      + `<div class="id">model: ${escapeHtml(p.defaultModel)}</div>`
       + `<div class="caps">${Object.entries(p.capabilities || {}).filter(([, v]) => v).map(([k]) => `<span class="pill">${escapeHtml(k)}</span>`).join('')}</div>`;
     grid.appendChild(card);
   }
@@ -374,19 +375,19 @@ async function loadMatrix() {
   try {
     const { matrix } = await api('/api/models');
     const caps = ['coding', 'reasoning', 'security', 'research', 'speed'];
-    const head = `<tr><th>Modelo</th>${caps.map((c) => `<th>${c}</th>`).join('')}</tr>`;
+    const head = `<tr><th>model</th>${caps.map((c) => `<th>${c}</th>`).join('')}</tr>`;
     const rows = matrix.slice(0, 60).map((m) => `<tr><td>${escapeHtml(m.providerId)}:<b>${escapeHtml(m.modelId)}</b></td>`
       + caps.map((c) => `<td><span class="mbar"><i style="width:${Math.round((m.capabilities[c] || 0) * 100)}%"></i></span></td>`).join('') + '</tr>').join('');
     $('#matrixWrap').innerHTML = `<table class="matrix">${head}${rows}</table>`;
-  } catch { /* opcional */ }
+  } catch { /* optional */ }
 }
 
 async function loadPermissions() {
   try {
     const { permissions } = await api('/api/tools');
     $('#permList').innerHTML = permissions.map((p) => `<div class="perm-row"><span>${p.permission}</span>`
-      + `<span class="pill ${p.enabled ? 'ok' : 'bad'}">${p.enabled ? 'habilitado' : 'bloqueado'}</span></div>`).join('');
-  } catch { /* opcional */ }
+      + `<span class="pill ${p.enabled ? 'ok' : 'bad'}">${p.enabled ? 'enabled' : 'blocked'}</span></div>`).join('');
+  } catch { /* optional */ }
 }
 
 async function refreshRuns() {
@@ -394,49 +395,52 @@ async function refreshRuns() {
     const { runs } = await api('/api/memory/runs');
     state.runs = runs;
     const box = $('#runsList');
-    box.innerHTML = runs.length ? '' : '<div class="empty">Nenhuma execução registrada.</div>';
+    box.innerHTML = runs.length ? '' : `<div class="empty">${escapeHtml(t('runs.empty'))}</div>`;
     for (const r of runs) {
       const row = el('div', 'run-row');
-      row.innerHTML = `<div><div class="r-task">${escapeHtml(r.task || '')}</div><div class="r-meta">${escapeHtml(r.mode)} · ${new Date(r.createdAt).toLocaleString('pt-BR')}</div></div><span class="pill">${escapeHtml(r.status)}</span>`;
+      row.innerHTML = `<div><div class="r-task">${escapeHtml(r.task || '')}</div><div class="r-meta">${escapeHtml(r.mode)} · ${new Date(r.createdAt).toLocaleString()}</div></div><span class="pill">${escapeHtml(r.status)}</span>`;
       row.onclick = () => loadRun(r.id);
       box.appendChild(row);
     }
-  } catch { /* opcional */ }
+  } catch { /* optional */ }
 }
 
 async function loadRun(id) {
   try {
     const run = await api(`/api/memory/runs/${id}`);
-    if (!state.agents.size) state.agents.clear();
-    const detail = (run.tasks || []).map((t) => ({ id: t.taskId, role: t.role, agent: t.agent, provider: t.provider, model: t.model, status: t.status, durationMs: t.durationMs }));
-    if (detail.length) { state.agents.clear(); detail.forEach((t) => state.agents.set(t.id, t)); }
-    showView('hive'); renderAgents();
-    toast(`Run ${id}: ${detail.length} agentes`);
+    const detail = (run.tasks || []).map((task) => ({ id: task.taskId, role: task.role, agent: task.agent, provider: task.provider, model: task.model, status: task.status, durationMs: task.durationMs }));
+    if (detail.length) { state.agents.clear(); detail.forEach((task) => state.agents.set(task.id, task)); }
+    showView('hive');
+    renderAgents();
+    toast(t('toast.run', { id, n: detail.length }));
   } catch (error) { toast(error.message, true); }
 }
 
 /* ----------------------------- status / nav ----------------------------- */
 function setStatus(ok, text) {
-  const dot = $('#statusDot');
-  dot.className = `dot ${ok ? 'online' : 'offline'}`;
+  $('#statusDot').className = `dot ${ok ? 'online' : 'offline'}`;
   $('#statusText').textContent = text;
 }
 async function refreshStatus() {
   try {
     const s = await api('/api/status');
     const configured = (s.providers || []).filter((p) => p.configured).length;
-    setStatus(configured > 0, `${configured} providers`);
-    $('#projectChip').textContent = `${s.tools?.project?.name || 'projeto'} · ${(s.tools?.project?.ecosystems || []).join(', ') || '?'}`;
+    setStatus(configured > 0, t('status.providers', { n: configured }));
+    $('#projectChip').textContent = `${s.tools?.project?.name || 'project'} · ${(s.tools?.project?.ecosystems || []).join(', ') || '?'}`;
     $('#wsPath').textContent = s.workspace || '';
-  } catch { setStatus(false, 'offline'); }
+  } catch { setStatus(false, t('status.offline')); }
 }
+
+const MODE_HINT_KEY = {
+  normal: 'hint.normal', fallback: 'hint.fallback', auto: 'hint.auto', 'multi-agent': 'hint.multiAgent',
+  hive: 'hint.hive', super: 'hint.super', build: 'hint.build', debug: 'hint.debug', review: 'hint.review', custom: 'hint.custom'
+};
 
 function showView(view) {
   state.view = view;
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === view));
-  const titles = { chat: 'Chat', hive: 'Hive Mind', files: 'Arquivos', terminal: 'Terminal', git: 'Git', providers: 'Providers', runs: 'Execuções', settings: 'Configuração' };
-  $('#viewTitle').textContent = titles[view] || view;
+  $('#viewTitle').textContent = t(`view.${view}`);
   if (view === 'files') refreshFiles();
   if (view === 'runs') refreshRuns();
   if (view === 'settings') loadPermissions();
@@ -445,7 +449,7 @@ function showView(view) {
 
 /* ----------------------------- wiring ----------------------------- */
 function wire() {
-  document.querySelectorAll('.nav-item').forEach((n) => n.onclick = () => showView(n.dataset.view));
+  document.querySelectorAll('.nav-item').forEach((n) => { n.onclick = () => showView(n.dataset.view); });
 
   $('#composer').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -459,40 +463,39 @@ function wire() {
   });
   $('#codeToggle').onclick = (e) => { state.code = !state.code; e.currentTarget.classList.toggle('on', state.code); };
 
-  $('#modeSelect').addEventListener('change', () => {
-    const mode = $('#modeSelect').value;
-    const hints = {
-      normal: 'Um único modelo responde.',
-      fallback: 'Modelo principal com alternativas automáticas.',
-      auto: 'O sistema escolhe o melhor modelo pelo tipo da tarefa.',
-      'multi-agent': 'Vários agentes com papéis distintos, síntese do Master.',
-      hive: 'Hive Mind: Master planeja, agentes colaboram em paralelo.',
-      build: 'Foco em construção de software (Hive orientado a build).',
-      debug: 'Loop autônomo de teste → correção → teste.',
-      review: 'Foco em revisão de código.',
-      custom: 'Você controla tudo manualmente.'
-    };
-    $('#modeHint').textContent = hints[mode] || '';
+  const applyModeHint = () => { $('#modeHint').textContent = t(MODE_HINT_KEY[$('#modeSelect').value] || 'hint.hive'); };
+  $('#modeSelect').addEventListener('change', applyModeHint);
+  applyModeHint();
+
+  $('#langSelect').addEventListener('change', (e) => {
+    window.I18n.setLang(e.target.value);
+    window.I18n.apply();
+    applyModeHint();
+    renderChat();
+    renderAgents();
+    refreshProviders();
+    refreshRuns();
   });
 
-  $('#clearTimeline').onclick = () => { $('#timeline').innerHTML = '<div class="empty">Eventos do sistema aparecerão aqui.</div>'; };
+  $('#clearTimeline').onclick = () => { $('#timeline').innerHTML = ''; };
   $('#refreshFiles').onclick = refreshFiles;
   $('#saveFile').onclick = saveFile;
   $('#refreshRuns').onclick = refreshRuns;
   $('#termForm').addEventListener('submit', (e) => { e.preventDefault(); const c = $('#termCmd').value.trim(); if (!c) return; $('#termCmd').value = ''; runTerminal(c); });
-  document.querySelectorAll('[data-git]').forEach((b) => b.onclick = () => runGit(b.dataset.git));
+  document.querySelectorAll('[data-git]').forEach((b) => { b.onclick = () => runGit(b.dataset.git); });
 
   document.addEventListener('click', (e) => {
     const copy = e.target.closest('[data-copy]');
     if (copy) {
       const code = copy.closest('.code-wrap')?.querySelector('.code-block')?.textContent || '';
-      navigator.clipboard.writeText(code).then(() => toast('Código copiado.')).catch(() => {});
+      navigator.clipboard.writeText(code).then(() => toast(t('toast.copied'))).catch(() => {});
     }
   });
 }
 
 /* ----------------------------- boot ----------------------------- */
 function boot() {
+  if (window.I18n) { window.I18n.init(); window.I18n.apply(); $('#langSelect').value = window.I18n.lang; }
   wire();
   if (!state.conversations.length) newConversation(); else { state.currentId = state.conversations[0].id; renderChat(); }
   renderAgents();

@@ -19,6 +19,9 @@ import { registerAllTools, listTools, runTool, permissionSummary } from './tools
 import { diagnostics, detectProject } from './tools/project.js';
 import { chat, chatStream } from './orchestrator/engine.js';
 import { listRuns, loadRun } from './memory/store.js';
+import { loadProjectMemory, observeProject, recordDecision } from './memory/project.js';
+import { listPromptModules, PROMPT_VERSION } from './prompts/engine.js';
+import { roleList } from './agents/roles.js';
 
 registerAllTools();
 
@@ -115,7 +118,27 @@ async function handle(req, res) {
     return sendJson(res, 200, await runTool(String(body.tool), body.params || {}));
   }
 
-  if (req.method === 'GET' && pathname === '/api/project') return sendJson(res, 200, await detectProject());
+  if (req.method === 'GET' && pathname === '/api/project') {
+    const project = await detectProject();
+    try { await observeProject({ project, files: await listTree('.', { depth: 4 }) }); } catch { /* memória é best-effort */ }
+    return sendJson(res, 200, project);
+  }
+
+  if (req.method === 'GET' && pathname === '/api/memory/project') return sendJson(res, 200, await loadProjectMemory());
+
+  if (req.method === 'POST' && pathname === '/api/memory/project') {
+    const body = await readJson(req);
+    if (body.decision) await recordDecision(String(body.decision));
+    const project = await detectProject();
+    const memory = await observeProject({ project, files: await listTree('.', { depth: 4 }) });
+    return sendJson(res, 200, memory);
+  }
+
+  if (req.method === 'GET' && pathname === '/api/prompts') {
+    return sendJson(res, 200, { version: PROMPT_VERSION, modules: listPromptModules() });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/roles') return sendJson(res, 200, { roles: roleList() });
 
   if (req.method === 'GET' && pathname === '/api/files') {
     const dir = url.searchParams.get('dir') || '.';

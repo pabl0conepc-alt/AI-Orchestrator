@@ -5,12 +5,18 @@ import { equivalenceKey, familyOf, modelKey } from './identity.js';
 // Pesos por tipo de tarefa. O Master usa estes perfis para escolher o especialista.
 export const TASK_PROFILES = {
   architect: { reasoning: 0.9, coding: 0.6, context: 0.5, research: 0.4 },
+  planner: { reasoning: 0.8, coding: 0.5, context: 0.6, writing: 0.4 },
   research: { research: 0.9, reasoning: 0.5, context: 0.6, writing: 0.4 },
   security: { security: 0.9, reasoning: 0.7, coding: 0.5 },
+  performance: { coding: 0.8, reasoning: 0.8, speed: 0.4 },
+  uiux: { coding: 0.7, writing: 0.6, reasoning: 0.5 },
   implement: { coding: 1.0, tools: 0.5, reasoning: 0.4 },
   debug: { coding: 0.9, reasoning: 0.7, tools: 0.5 },
   test: { coding: 0.8, reasoning: 0.5, tools: 0.6 },
   review: { reasoning: 0.7, coding: 0.7, security: 0.4, writing: 0.3 },
+  docs: { writing: 0.9, reasoning: 0.4, coding: 0.3 },
+  devops: { tools: 0.8, coding: 0.7, reasoning: 0.5 },
+  release: { tools: 0.7, coding: 0.6, reasoning: 0.5 },
   coordinate: { reasoning: 1.0, writing: 0.5, context: 0.5 },
   general: { reasoning: 0.5, coding: 0.5, writing: 0.5 }
 };

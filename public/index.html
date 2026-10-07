@@ -1,29 +1,29 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0e17" />
-  <title>AI Orchestrator — Plataforma de IA para Programação</title>
+  <title>AI Orchestrator — Programming AI Platform</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="app">
     <aside class="rail">
-      <div class="brand"><span class="logo">◈</span><div><b>AI ORCHESTRATOR</b><small>coding intelligence platform</small></div></div>
+      <div class="brand"><span class="logo">◈</span><div><b>AI ORCHESTRATOR</b><small data-i18n="brand.sub">coding intelligence platform</small></div></div>
       <nav class="nav" id="nav">
-        <button class="nav-item active" data-view="chat"><i>💬</i><span>Chat</span></button>
-        <button class="nav-item" data-view="hive"><i>🧠</i><span>Hive Mind</span></button>
-        <button class="nav-item" data-view="files"><i>🗂</i><span>Arquivos</span></button>
-        <button class="nav-item" data-view="terminal"><i>⌨</i><span>Terminal</span></button>
-        <button class="nav-item" data-view="git"><i>⑂</i><span>Git</span></button>
-        <button class="nav-item" data-view="providers"><i>🔌</i><span>Providers</span></button>
-        <button class="nav-item" data-view="runs"><i>🗃</i><span>Execuções</span></button>
-        <button class="nav-item" data-view="settings"><i>⚙</i><span>Config</span></button>
+        <button class="nav-item active" data-view="chat"><i>💬</i><span data-i18n="nav.chat">Chat</span></button>
+        <button class="nav-item" data-view="hive"><i>🧠</i><span data-i18n="nav.hive">Hive Mind</span></button>
+        <button class="nav-item" data-view="files"><i>🗂</i><span data-i18n="nav.files">Files</span></button>
+        <button class="nav-item" data-view="terminal"><i>⌨</i><span data-i18n="nav.terminal">Terminal</span></button>
+        <button class="nav-item" data-view="git"><i>⑂</i><span data-i18n="nav.git">Git</span></button>
+        <button class="nav-item" data-view="providers"><i>🔌</i><span data-i18n="nav.providers">Providers</span></button>
+        <button class="nav-item" data-view="runs"><i>🗃</i><span data-i18n="nav.runs">Runs</span></button>
+        <button class="nav-item" data-view="settings"><i>⚙</i><span data-i18n="nav.settings">Settings</span></button>
       </nav>
       <div class="rail-bottom">
         <div class="health-mini">
-          <span class="dot" id="statusDot"></span><span id="statusText">conectando…</span>
+          <span class="dot" id="statusDot"></span><span id="statusText" data-i18n="status.connecting">connecting…</span>
         </div>
         <div class="ws-mini" id="wsPath">—</div>
       </div>
@@ -33,25 +33,33 @@
       <header class="topbar">
         <div class="tb-left">
           <h1 id="viewTitle">Chat</h1>
-          <span class="chip" id="projectChip">analisando projeto…</span>
+          <span class="chip" id="projectChip">…</span>
         </div>
         <div class="tb-right">
-          <label class="field"><span>Modo</span>
+          <label class="field"><span data-i18n="top.mode">Mode</span>
             <select id="modeSelect">
-              <option value="normal">Normal</option>
-              <option value="fallback">Fallback</option>
-              <option value="auto">Auto</option>
-              <option value="multi-agent">Multi-Agent</option>
-              <option value="hive" selected>Hive Mind</option>
-              <option value="build">Build</option>
-              <option value="debug">Debug</option>
-              <option value="review">Review</option>
-              <option value="custom">Custom</option>
+              <option value="normal" data-i18n="mode.normal">Normal</option>
+              <option value="fallback" data-i18n="mode.fallback">Fallback</option>
+              <option value="auto" data-i18n="mode.auto">Auto</option>
+              <option value="multi-agent" data-i18n="mode.multiAgent">Multi-Agent</option>
+              <option value="hive" selected data-i18n="mode.hive">Hive Mind</option>
+              <option value="super" data-i18n="mode.super">Super Mode</option>
+              <option value="build" data-i18n="mode.build">Build</option>
+              <option value="debug" data-i18n="mode.debug">Debug</option>
+              <option value="review" data-i18n="mode.review">Review</option>
+              <option value="custom" data-i18n="mode.custom">Custom</option>
             </select>
           </label>
-          <label class="field"><span>Provider</span><select id="providerSelect"></select></label>
-          <label class="field wide"><span>Modelo</span><input id="modelInput" placeholder="auto / provider:model" /></label>
-          <button id="codeToggle" class="toggle on" title="Inteligência focada em código">CODE</button>
+          <label class="field"><span data-i18n="top.provider">Provider</span><select id="providerSelect"></select></label>
+          <label class="field wide"><span data-i18n="top.model">Model</span><input id="modelInput" placeholder="auto / provider:model" /></label>
+          <label class="field"><span data-i18n="top.language">Language</span>
+            <select id="langSelect">
+              <option value="en">English</option>
+              <option value="pt">Português</option>
+              <option value="es">Español</option>
+            </select>
+          </label>
+          <button id="codeToggle" class="toggle on" data-i18n-title="top.code" title="Code intelligence">CODE</button>
         </div>
       </header>
 
@@ -59,14 +67,12 @@
       <section class="view active" id="view-chat">
         <div class="chat" id="chat"></div>
         <div class="composer-wrap">
-          <div class="composer-hints">
-            <span id="modeHint">Modo Hive: o Master planeja e os agentes trabalham em conjunto.</span>
-          </div>
+          <div class="composer-hints"><span id="modeHint" data-i18n="hint.hive"></span></div>
           <form class="composer" id="composer">
-            <textarea id="input" rows="1" placeholder="Descreva a tarefa. Ex.: Crie um sistema de autenticação completo para este projeto."></textarea>
-            <button class="send" type="submit" title="Enviar">➤</button>
+            <textarea id="input" rows="1" data-i18n-placeholder="chat.placeholder" placeholder="Describe the task…"></textarea>
+            <button class="send" type="submit" title="Send">➤</button>
           </form>
-          <div class="hint">Enter envia • Shift+Enter quebra linha • Workspace local + providers roteados</div>
+          <div class="hint" data-i18n="chat.hint"></div>
         </div>
       </section>
 
@@ -74,12 +80,12 @@
       <section class="view" id="view-hive">
         <div class="hive-layout">
           <div class="panel">
-            <div class="panel-head"><h2>Agentes</h2><span class="chip" id="hiveDiversity">—</span></div>
-            <div id="agentGrid" class="agent-grid"><div class="empty">Nenhuma execução ainda. Envie uma tarefa no chat no modo Hive/Build.</div></div>
+            <div class="panel-head"><h2 data-i18n="hive.agents">Agents</h2><span class="chip" id="hiveDiversity">—</span></div>
+            <div id="agentGrid" class="agent-grid"><div class="empty" data-i18n="hive.empty"></div></div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h2>Timeline de atividade</h2><button class="mini" id="clearTimeline">limpar</button></div>
-            <div id="timeline" class="timeline"><div class="empty">Eventos do sistema aparecerão aqui.</div></div>
+            <div class="panel-head"><h2 data-i18n="hive.timeline">Activity timeline</h2><button class="mini" id="clearTimeline" data-i18n="hive.clear">clear</button></div>
+            <div id="timeline" class="timeline"></div>
           </div>
         </div>
       </section>
@@ -88,12 +94,12 @@
       <section class="view" id="view-files">
         <div class="files-layout">
           <div class="panel file-tree-panel">
-            <div class="panel-head"><h2>Workspace</h2><button class="mini" id="refreshFiles">atualizar</button></div>
+            <div class="panel-head"><h2 data-i18n="files.workspace">Workspace</h2><button class="mini" id="refreshFiles" data-i18n="files.refresh">refresh</button></div>
             <div id="fileTree" class="file-tree"></div>
           </div>
           <div class="panel editor-panel">
-            <div class="panel-head"><h2 id="editorPath">Nenhum arquivo aberto</h2><div><button class="mini" id="saveFile">salvar</button></div></div>
-            <textarea id="editor" class="editor" spellcheck="false" placeholder="Selecione um arquivo para visualizar/editar"></textarea>
+            <div class="panel-head"><h2 id="editorPath" data-i18n="files.none">No file open</h2><div><button class="mini" id="saveFile" data-i18n="files.save">save</button></div></div>
+            <textarea id="editor" class="editor" spellcheck="false" data-i18n-placeholder="files.placeholder" placeholder="Select a file"></textarea>
           </div>
         </div>
       </section>
@@ -101,31 +107,34 @@
       <!-- TERMINAL -->
       <section class="view" id="view-terminal">
         <div class="panel terminal-panel">
-          <div class="panel-head"><h2>Terminal controlado</h2><span class="chip">allowlist • sem shell</span></div>
-          <pre id="termOut" class="terminal">$ pronto. Comandos permitidos: node, npm, git, rg, python3, ls, cat…</pre>
-          <form id="termForm" class="term-input"><span class="prompt">$</span><input id="termCmd" placeholder="npm test" autocomplete="off" /><button type="submit">executar</button></form>
+          <div class="panel-head"><h2 data-i18n="term.title">Controlled terminal</h2><span class="chip" data-i18n="term.note">allowlist • no shell</span></div>
+          <pre id="termOut" class="terminal" data-i18n="term.ready"></pre>
+          <form id="termForm" class="term-input"><span class="prompt">$</span><input id="termCmd" placeholder="npm test" autocomplete="off" /><button type="submit" data-i18n="term.run">run</button></form>
         </div>
       </section>
 
       <!-- GIT -->
       <section class="view" id="view-git">
         <div class="panel">
-          <div class="panel-head"><h2>Git</h2></div>
+          <div class="panel-head"><h2 data-i18n="git.title">Git</h2></div>
           <div class="btn-row">
-            <button class="mini" data-git="git_status">status</button>
-            <button class="mini" data-git="git_diff">diff</button>
-            <button class="mini" data-git="git_log">log</button>
-            <button class="mini" data-git="git_branches">branches</button>
-            <button class="mini" data-git="git_stash_list">stash</button>
+            <button class="mini" data-git="git_status" data-i18n="git.status">status</button>
+            <button class="mini" data-git="git_diff" data-i18n="git.diff">diff</button>
+            <button class="mini" data-git="git_log" data-i18n="git.log">log</button>
+            <button class="mini" data-git="git_branches" data-i18n="git.branches">branches</button>
+            <button class="mini" data-git="git_stash_list" data-i18n="git.stash">stash</button>
+            <button class="mini" data-git="git_change_summary" data-i18n="git.summary">change summary</button>
+            <button class="mini" data-git="git_commit_suggest" data-i18n="git.suggest">suggest commit</button>
+            <button class="mini" data-git="git_snapshot" data-i18n="git.snapshot">snapshot</button>
           </div>
-          <pre id="gitOut" class="terminal">Escolha uma operação.</pre>
+          <pre id="gitOut" class="terminal" data-i18n="git.choose" ></pre>
         </div>
       </section>
 
       <!-- PROVIDERS -->
       <section class="view" id="view-providers">
         <div class="panel">
-          <div class="panel-head"><h2>Provider Manager</h2><span class="chip" id="providerCount">—</span></div>
+          <div class="panel-head"><h2 data-i18n="providers.title">Provider Manager</h2><span class="chip" id="providerCount">—</span></div>
           <div id="providerGrid" class="provider-grid"></div>
         </div>
       </section>
@@ -133,7 +142,7 @@
       <!-- RUNS -->
       <section class="view" id="view-runs">
         <div class="panel">
-          <div class="panel-head"><h2>Execuções (memória de tarefas)</h2><button class="mini" id="refreshRuns">atualizar</button></div>
+          <div class="panel-head"><h2 data-i18n="runs.title">Runs</h2><button class="mini" id="refreshRuns" data-i18n="runs.refresh">refresh</button></div>
           <div id="runsList" class="runs-list"></div>
         </div>
       </section>
@@ -142,11 +151,11 @@
       <section class="view" id="view-settings">
         <div class="hive-layout">
           <div class="panel">
-            <div class="panel-head"><h2>Permissões de ferramentas</h2></div>
+            <div class="panel-head"><h2 data-i18n="settings.permissions">Tool permissions</h2></div>
             <div id="permList" class="perm-list"></div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h2>Capability Matrix</h2></div>
+            <div class="panel-head"><h2 data-i18n="settings.matrix">Capability Matrix</h2></div>
             <div id="matrixWrap" class="matrix-wrap"></div>
           </div>
         </div>
@@ -155,6 +164,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
