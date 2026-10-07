@@ -184,6 +184,18 @@ export async function synthesize({ request, results, coordinator, catalog, prefe
   }
   // Fallback determinístico: entrega o dossiê bruto organizado.
   if (dossier) return { text: dossier, provider: 'local', model: 'deterministic', synthesized: false };
+  // Sem nenhum agente bem-sucedido: sintetiza um relatório determinístico de falha,
+  // para que o run seja concluído (task.done na UI) em vez de ficar preso em "running".
+  const failed = results.filter((r) => r && r.status !== 'done');
+  const lines = failed.slice(0, 8).map((r) => `- [${r.agent || r.role}] (${r.taskId || '?'}): ${r.error || 'falha desconhecida'}`);
+  return {
+    text: ['**Nenhum agente conseguiu concluído sua subtarefa.** Relatório determinístico de erros:', ...lines].join('\n'),
+    provider: 'local',
+    model: 'deterministic',
+    synthesized: false,
+    deterministicFallback: true,
+    lastError: lastError?.message
+  };
   throw lastError || new Error('Nenhum modelo conseguiu sintetizar a resposta final.');
 }
 

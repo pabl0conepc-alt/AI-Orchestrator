@@ -1,0 +1,126 @@
+/* ============================================================
+   AI Orchestrator — Design tokens
+   Single source of truth for color, space, radius, shadow,
+   motion and typography. Views never hard-code raw values.
+   ============================================================ */
+
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader-var.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader-italic-var.woff2') format('woff2');
+  font-weight: 400 600;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-var.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ---- Color · warm editorial base ---- */
+  --paper: #FAF9F5;          /* app background */
+  --surface: #FFFFFF;        /* raised cards */
+  --surface-2: #F4F2EA;      /* inset wells, code, terminal chrome */
+  --surface-3: #EEEBE0;      /* hover wells */
+  --ink: #141413;            /* primary text */
+  --ink-2: #55534C;          /* secondary text */
+  --muted: #B0AEA5;          /* tertiary / metadata */
+  --border: #E8E6DC;         /* hairlines */
+  --border-strong: #D9D6C8;
+
+  --accent: #D97757;         /* terracotta — primary action */
+  --accent-deep: #C2603F;    /* hover / pressed */
+  --accent-soft: #F6E3DA;    /* tinted fill */
+  --accent-fade: #FBF1EB;    /* faintest tint */
+
+  --blue: #6A9BCC;           /* informational */
+  --blue-soft: #E4EEF7;
+  --green: #788C5D;          /* success */
+  --green-soft: #E9EDDF;
+  --red: #BF4D43;            /* error */
+  --red-soft: #F7E4E1;
+  --amber: #C0913F;          /* warning / degraded */
+  --amber-soft: #F5EDDB;
+
+  --console-bg: #201F1B;     /* terminal / code well */
+  --console-fg: #E8E5DC;
+  --console-dim: #8F8D83;
+  --console-accent: #E39B7B;
+
+  /* ---- Typography ---- */
+  --font-serif: 'Newsreader', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --fs-display: clamp(1.75rem, 1.2rem + 1.8vw, 2.375rem);   /* 28–38 serif */
+  --fs-h1: 1.375rem;      /* 22 */
+  --fs-h2: 1.0625rem;     /* 17 */
+  --fs-h3: 0.9375rem;     /* 15 */
+  --fs-body: 0.875rem;    /* 14 */
+  --fs-small: 0.8125rem;  /* 13 */
+  --fs-caption: 0.75rem;  /* 12 */
+  --fs-meta: 0.6875rem;   /* 11 */
+
+  --lh-tight: 1.18;
+  --lh-snug: 1.35;
+  --lh-body: 1.6;
+  --lh-loose: 1.75;
+
+  --track-caps: 0.08em;   /* letter-spacing for uppercase labels */
+
+  /* ---- Spacing scale (4-base) ---- */
+  --s-1: 4px;  --s-2: 8px;   --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px;  --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px; --s-20: 80px; --s-24: 96px;
+
+  /* ---- Radius (moderate, personality per component) ---- */
+  --r-sm: 8px;    /* chips, inputs */
+  --r-md: 12px;   /* cards, buttons */
+  --r-lg: 16px;   /* panels, composer */
+  --r-xl: 20px;   /* modals, drawer */
+  --r-pill: 999px;/* pills, dots only */
+
+  /* ---- Elevation (warm, never heavy) ---- */
+  --shadow-1: 0 1px 2px rgba(20, 20, 19, 0.04), 0 1px 6px rgba(20, 20, 19, 0.03);
+  --shadow-2: 0 2px 6px rgba(20, 20, 19, 0.05), 0 8px 24px rgba(20, 20, 19, 0.06);
+  --shadow-3: 0 4px 12px rgba(20, 20, 19, 0.07), 0 16px 48px rgba(20, 20, 19, 0.10);
+  --ring: 0 0 0 3px rgba(217, 119, 87, 0.18);
+  --ring-blue: 0 0 0 3px rgba(106, 155, 204, 0.20);
+
+  /* ---- Motion ---- */
+  --t-hover: 130ms;
+  --t-micro: 160ms;
+  --t-fade: 220ms;
+  --t-transition: 260ms;
+  --t-panel: 380ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-inout: cubic-bezier(0.6, 0, 0.3, 1);
+  --ease-spring: cubic-bezier(0.3, 1.25, 0.5, 1);
+
+  /* ---- Layout ---- */
+  --sidebar-w: 252px;
+  --topbar-h: 60px;
+  --content-max: 1120px;
+  --measure: 68ch;         /* comfortable reading width */
+  --z-nav: 40;  --z-drawer: 60;  --z-modal: 80;  --z-toast: 100;
+}
+
+/* Graceful motion opt-out — every CSS animation/transition collapses. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

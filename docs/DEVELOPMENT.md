@@ -25,7 +25,35 @@ npm run doctor         # environment + config + tests (scripts/doctor.sh)
 | Tools | `src/tools/` | Registry, permissions, filesystem, git, shell, project |
 | Prompts | `src/prompts/engine.js` | Modular, versioned prompt sections |
 | Memory | `src/memory/` | Task runs and project intelligence |
-| UI | `public/` | `index.html`, `styles.css`, `app.js`, `i18n.js` |
+| UI | `public/` | SPA shell + design system (see below) |
+
+## Frontend architecture
+
+```
+public/
+├── index.html       shell: sidebar, topbar, 8 views, composer, busy-bar
+├── app.js           entry: boot, nav, SSE→agents, orchestration, HUD
+├── i18n.js          ESM dictionary (en/pt/es)
+├── styles.css       @import hub — order matters
+├── styles/          tokens → base → components → layout → views → ait
+├── js/
+│   ├── core.js      $, $$, el, escapeHtml, state (localStorage), API client
+│   ├── icons.js     inline SVG icon set + brand mark
+│   ├── motion.js    Anime.js v4 wrapper (entrance, stagger, indicator, modal)
+│   ├── markdown.js  escape-first markdown-lite renderer
+│   ├── components.js toast, modal, command menu (⌘K)
+│   └── views/       chat.js (chat+pipeline+composer), surfaces.js (hive, files,
+│                    terminal, git, providers, runs, settings)
+├── vendor/anime.esm.js   Anime.js v4.0.2 (MIT), served locally — no CDN
+└── fonts/           Inter var, Newsreader var (+italic), self-hosted
+```
+
+- **Tokens only**: never write raw colors/spacing in views; use `--s-*`, `--r-*`, `--shadow-*`,
+  `--t-*` from `styles/tokens.css`.
+- **Motion**: CSS transitions for hover/focus (130–260ms), Anime.js for coordinated sequences.
+  Every entry animation honors `prefers-reduced-motion` (tokens.css collapses durations).
+- **New UI text** must use `public/i18n.js` keys — English is the source of truth.
+- The server serves `public/` statically; no build step is required.
 
 ## Conventions
 

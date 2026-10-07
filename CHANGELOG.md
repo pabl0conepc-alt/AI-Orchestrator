@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [1.1.0] — Unreleased
 
 ### Added
+- **Frontend redesign (complete)**: layered design system in `public/styles/*` (tokens → base →
+  components → layout → views), warm editorial palette (`#FAF9F5` paper, terracotta accent,
+  Newsreader serif + Inter + mono), 4-base spacing scale and tokenized radii/shadows/motion.
+- **Anime.js v4** vendored locally (`public/vendor/anime.esm.js`, no npm dependency): entrance
+  fades, stagger-in lists, sliding nav indicator, modal choreography, pipeline step pulses,
+  numeric ticks. All motion respects `prefers-reduced-motion`.
+- **Command menu (⌘K or /)**: navigate views, switch orchestration modes, start a new task.
+- **Orchestration pipeline card**: Request → Plan → Agents → Processing → Result driven by real
+  backend events, plus a busy-bar with a live agent count.
+- **Fonts self-hosted** (`public/fonts/`): Inter var, Newsreader var + italic — no CDN calls.
+- **Modular frontend** (`public/js/`): core, icons, motion, markdown, components and view modules;
+  `public/app.js` and `public/i18n.js` remain the stable entries.
 - **Super Mode**: independent solutions from multiple models, cross-critique and consensus synthesis.
 - **System Prompt Engine** (`src/prompts/engine.js`): modular, versioned prompt sections composed by context.
 - **Project memory** (`src/memory/project.js`): persists architecture, technologies, conventions, key files,

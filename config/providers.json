@@ -134,13 +134,26 @@
     "envKey": "LLM7_API_KEY",
     "transport": "openai-chat",
     "baseUrl": "https://api.llm7.io/v1",
-    "defaultModel": "gpt-4o-mini",
-    "models": ["gpt-4o-mini"],
+    "defaultModel": "DeepSeek-V4-Flash-0731",
+    "models": ["DeepSeek-V4-Flash-0731", "GLM-5.3-Flash"],
     "enabledByDefault": true,
     "supportsStreaming": true,
     "freePool": true,
     "priority": 110,
     "capabilities": { "text": true, "vision": false, "tools": true, "streaming": true, "coding": true }
+  },
+  "pollinations": {
+    "name": "Pollinations",
+    "envKey": "POLLINATIONS_API_KEY",
+    "transport": "openai-chat",
+    "baseUrl": "https://text.pollinations.ai/openai",
+    "defaultModel": "openai",
+    "models": ["openai", "openai-fast"],
+    "enabledByDefault": true,
+    "supportsStreaming": false,
+    "freePool": true,
+    "priority": 105,
+    "capabilities": { "text": true, "vision": false, "tools": false, "streaming": false, "coding": true }
   },
   "cerebras": {
     "name": "Cerebras",
