@@ -5,6 +5,7 @@ import { executeTask } from './worker.js';
 import { roleName } from './roles.js';
 import { selectDiverse, TASK_PROFILES } from '../models/selection.js';
 import { createRun, remember, save } from '../memory/store.js';
+import { loadProjectMemory, selectContext } from '../memory/project.js';
 import { emit } from '../core/events.js';
 import { metrics } from '../core/metrics.js';
 import { envInt } from '../core/env.js';
@@ -46,7 +47,9 @@ export async function runHive({ request, project, catalog, mode = 'hive', prefer
   const results = {};
   const completed = new Set();
   const pending = new Set(plan.tasks.map((t) => t.id));
-  const context = { global: request, project: projectSummary(project) };
+  // Contexto do projeto: resumo estrutural + memória persistente selecionada para este pedido.
+  const memoryContext = selectContext(await loadProjectMemory(), request, { maxChars: 2500 });
+  const context = { global: request, project: [projectSummary(project), memoryContext].filter(Boolean).join('\n\n') };
 
   const runOne = async (task) => {
     const models = [];

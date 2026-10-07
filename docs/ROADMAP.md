@@ -1,36 +1,40 @@
-# Roadmap — o que está pronto e o que falta
+# Roadmap
 
-Esta versão entregou a **evolução arquitetural real** do núcleo. O restante está aqui de forma
-explícita para não apresentar nada como pronto quando não está.
+Honest status of what is implemented and what remains. Nothing here is presented as done when it
+is not.
 
-## Implementado nesta versão
+## Shipped in 1.0
 
-- Master Agent (planejamento real via LLM + heurístico), atribuição de modelos e síntese.
-- Hive Mind com escalonamento por dependências e paralelismo genuíno.
-- Barramento de mensagens tipado entre agentes + histórico.
-- Identidade `provider:model` em seleção, fallback, memória e logs.
-- Deduplicação, diversidade (provider/família/modelo) e modo manual.
-- Matriz de capacidades e ranking (capacidade × confiabilidade × latência).
-- Tool Registry com schema, permissões, timeout e logs; filesystem confinado, Git, terminal em
-  allowlist, detecção de projeto e execução de testes.
-- Debugger autônomo limitado.
-- Streaming SSE real (OpenAI/Gemini) e eventos de atividade.
-- Memória de tarefa persistente, métricas e logs com redaction.
-- Frontend tipo IDE com monitor de agentes, timeline, arquivos, terminal, Git e Provider Manager.
+- Master Agent planning (LLM + heuristic), Hive Mind with dependency-aware parallel execution.
+- Typed inter-agent message bus with history.
+- Model identity `provider:model`, capability matrix, dedup and diversity, manual mode.
+- Permissioned Tool Registry, workspace-confined filesystem, git tools, allowlisted terminal,
+  project detection and test execution.
+- Autonomous debug loop, real SSE streaming, structured logging with redaction, metrics,
+  event timeline and persisted task memory.
+- IDE-style workspace UI.
 
-## Pendente (próximas camadas)
+## Shipped in 1.1
 
-- **Editor de código** com highlight/autocomplete (hoje é edição em textarea).
-- **File watcher** para refletir mudanças externas automaticamente.
-- **Consenso formal** multi-agente com votação e justificativas estruturadas (hoje: revisor + iteração).
-- **Continuidade de sessão** entre reinícios do servidor (hoje: histórico no browser + runs em disco).
-- **Empacotamento** `.deb`/AppImage/.apk/.exe (ver `PACKAGING.md`) — plano, não implementado.
-- **Providers adicionais** e catálogo de modelos por provider com validação ao vivo.
-- **Testes end-to-end dos adapters** com providers reais (requer chaves; coberto por mocks/contratos).
-- **Autenticação HTTP** para uso em rede.
+- **Super Mode**: independent proposals, cross-critique, disagreement detection and consensus.
+- **System Prompt Engine**: modular, versioned prompt sections composed by context.
+- **Project memory**: architecture, technologies, conventions, key files, decisions and known bugs,
+  with intelligent context selection and compaction.
+- **Extended agent roles**: Planner, Performance, UI/UX, Docs, DevOps, Release.
+- **Extended git tools**: change summary, commit suggestion, safe checkpoint (`git stash create`),
+  rollback, branch switch.
+- **i18n**: English (default), Portuguese and Spanish, with a language switcher.
+- **Secret scanning** and CI (validation + scan + tests).
+- **Public project files**: LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue/PR templates,
+  installation/configuration/providers/development guides.
+- **Packaging scripts**: Node SEA (Windows/cross-platform binary), `.deb`, AppImage.
 
-## Como adicionar um provider
+## Next
 
-1. Acrescente uma entrada em `config/providers.json` (transporte `openai-chat` na maioria dos casos).
-2. Descreva o modelo em `config/models.json` (família e capacidades) se for uma família nova.
-3. Defina a chave no `.env` (`envKey`). Nada mais é necessário.
+- **Rich code editor**: syntax highlighting and completion (today the editor is a plain textarea).
+- **File watcher** so external changes appear without a manual refresh.
+- **Richer consensus**: explicit voting and structured justifications (today: review + one fix iteration).
+- **Session continuity** across server restarts (history is in the browser, runs on disk).
+- **Live provider/model validation** against the real APIs (requires keys).
+- **HTTP authentication** for network-exposed deployments.
+- **Android client**: a native/WebView client against the REST/SSE API (see `PACKAGING.md`).

@@ -1,6 +1,6 @@
 {
   "name": "ai-orchestrator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Plataforma local de IA para programação: orquestração multiagente (Hive Mind), roteamento de modelos, ferramentas de desenvolvimento e workspace integrado.",
@@ -13,6 +13,7 @@
     "test": "node --test",
     "check": "node --test tests/",
     "build": "node scripts/validate-project.mjs",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
     "doctor": "bash scripts/doctor.sh"
   }
 }

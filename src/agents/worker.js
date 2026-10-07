@@ -3,6 +3,7 @@ import { callWithRetry } from '../orchestrator/invoke.js';
 import { resolveModel } from '../orchestrator/policy.js';
 import { ROLES, roleName } from './roles.js';
 import { runTool, listTools } from '../tools/registry.js';
+import { buildSystemPrompt } from '../prompts/engine.js';
 import { emit } from '../core/events.js';
 
 // Protocolo de ferramenta: o agente pode emitir um bloco ```tool ``` com JSON {tool, params}.
@@ -24,45 +25,38 @@ export function extractToolCalls(text) {
   return { clean, calls };
 }
 
-function toolMenu(canUseTools) {
-  if (!canUseTools) return 'Ferramentas desabilitadas para este papel.';
-  const tools = listTools().map((t) => `- ${t.name}(${Object.keys(t.params).join(', ')}): ${t.description}`);
-  return [
-    'Você pode usar ferramentas emitindo um bloco de código exatamente assim:',
-    '```tool',
-    '{ "tool": "read_file", "params": { "path": "src/x.js" } }',
-    '```',
-    'Ferramentas disponíveis:',
-    ...tools
-  ].join('\n');
+// Compõe o prompt de sistema modular (prompt engine) para o papel do agente.
+async function toolMenu(canUseTools) {
+  return canUseTools ? listTools() : [];
 }
 
-export function buildMessages(roleDef, task, context) {
-  const system = [
-    roleDef.instruction,
-    '',
-    'CONTEXTO GLOBAL (pedido do usuário):',
-    context.global || '(vazio)',
-    '',
-    'CONTEXTO DO PROJETO:',
-    context.project || '(não analisado)',
-    '',
-    context.dependencies ? `RESULTADOS DE DEPENDÊNCIAS:\n${context.dependencies}` : '',
-    context.messages ? `COMUNICAÇÃO DA EQUIPE (resumo):\n${context.messages}` : '',
-    '',
-    toolMenu(roleDef.canUseTools),
-    '',
-    'Regras: seja direto e técnico. Nunca afirme que executou algo que não executou.'
-  ].filter(Boolean).join('\n');
+export async function buildMessages(roleDef, task, context) {
+  const system = await buildSystemPrompt({
+    profile: roleDef.profile === 'general' ? 'general' : 'coding',
+    roleInstruction: roleDef.instruction,
+    project: context.projectInfo || null,
+    intent: context.global || '(vazio)',
+    task: task.instruction,
+    dependencies: context.dependencies || null,
+    messages: context.messages || null,
+    previousErrors: context.previousErrors || null,
+    tools: await toolMenu(roleDef.canUseTools),
+    security: true,
+    outputContract: 'Be direct and technical. Never claim a command or test was executed unless it actually was.'
+  });
 
-  const user = `SUBTAREFA [${task.id}] — papel: ${roleName(task.role)}\n\n${task.instruction}`;
+  const projectText = typeof context.project === 'string' ? context.project : null;
+  const user = [
+    projectText ? `PROJECT CONTEXT:\n${projectText}` : '',
+    `SUBTASK [${task.id}] — role: ${roleName(task.role)}\n\n${task.instruction}`
+  ].filter(Boolean).join('\n\n');
   return [{ role: 'system', content: system }, { role: 'user', content: user }];
 }
 
 // Executa a subtarefa com um modelo específico, incluindo loop de ferramentas real.
 export async function executeTask({ task, models, context, maxToolSteps = 3, temperature = 0.3, maxTokens = 4096 }) {
   const roleDef = ROLES[task.role] || ROLES.implementer;
-  const messages = buildMessages(roleDef, task, context);
+  const messages = await buildMessages(roleDef, task, context);
   let toolSteps = 0;
   let lastError;
 

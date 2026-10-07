@@ -19,11 +19,21 @@ const required = [
   'src/orchestrator/policy.js',
   'src/agents/master.js',
   'src/agents/hive.js',
+  'src/agents/super.js',
   'src/agents/worker.js',
+  'src/prompts/engine.js',
+  'src/memory/project.js',
   'src/tools/registry.js',
   'public/index.html',
   'public/app.js',
-  'public/styles.css'
+  'public/i18n.js',
+  'public/styles.css',
+  'LICENSE',
+  'CONTRIBUTING.md',
+  'SECURITY.md',
+  'docs/INSTALLATION.md',
+  'docs/CONFIGURATION.md',
+  'docs/PROVIDERS.md'
 ];
 
 for (const file of required) {

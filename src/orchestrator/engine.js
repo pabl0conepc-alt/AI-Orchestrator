@@ -6,6 +6,7 @@ import { callProvider, callWithRetry, streamProvider, getCircuitState } from './
 import { rankProviders, resolveModel, compactMessages } from './policy.js';
 import { selectDiverse, TASK_PROFILES, modelKey } from '../models/selection.js';
 import { runHive } from '../agents/hive.js';
+import { runSuperMode } from '../agents/super.js';
 import { runDebugLoop } from './debugger.js';
 import { executeTask } from '../agents/worker.js';
 import { synthesize } from '../agents/master.js';
@@ -16,15 +17,15 @@ import { envInt } from '../core/env.js';
 import { ROOT } from '../core/config.js';
 import { detectProject } from '../tools/project.js';
 import { listTree } from '../core/workspace.js';
+import { buildSystemPrompt } from '../prompts/engine.js';
 
-const systemPrompt = await fs.readFile(path.join(ROOT, 'prompts/coding-system.md'), 'utf8').catch(() => 'You are a senior software engineer assistant.');
+const CHAT_SECTIONS = ['base', 'codingPolicy', 'securityRules', 'outputContract'];
 
-function withSystem(messages, { coding = true, profile = 'coding' } = {}) {
-  const prompt = profile === 'general'
-    ? 'You are a helpful general-purpose assistant. Be accurate, practical, transparent about uncertainty, and concise.'
-    : systemPrompt;
+// Prompt de sistema modular/versionado para os modos de provider único.
+async function withSystem(messages, { coding = true, profile = 'coding' } = {}) {
+  const system = await buildSystemPrompt({ profile: coding ? profile : 'general' }, { sections: CHAT_SECTIONS });
   return [
-    { role: 'system', content: coding ? prompt : 'You are a helpful AI assistant. Be accurate, practical, and concise.' },
+    { role: 'system', content: system },
     ...messages.filter((m) => m.role !== 'system')
   ];
 }
@@ -74,7 +75,7 @@ export async function chat(params) {
     selectedProviders = [], profile = 'coding', manualModels = [], useTools = true
   } = params;
   validateMessages(messages);
-  const prepared = compactMessages(withSystem(messages, { coding: profile !== 'general', profile }), envInt('MAX_CONTEXT_CHARS', 90000));
+  const prepared = compactMessages(await withSystem(messages, { coding: profile !== 'general', profile }), envInt('MAX_CONTEXT_CHARS', 90000));
   const latestUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
   const started = Date.now();
 
@@ -83,6 +84,14 @@ export async function chat(params) {
     if (!catalog.length) throw Object.assign(new Error('Nenhum provider configurado. Adicione chaves no .env para usar o Hive Mind.'), { status: 400 });
     const project = await projectContext();
     const result = await runHive({ request: latestUser, project, catalog, mode, manualKeys: manualModels.length ? manualModels : undefined });
+    return { ...result, mode };
+  }
+
+  if (mode === 'super') {
+    const catalog = await resourceCatalog({ configuredOnly: true });
+    if (catalog.length < 2) throw Object.assign(new Error('Super Mode requer pelo menos 2 modelos configurados.'), { status: 400 });
+    const project = await projectContext();
+    const result = await runSuperMode({ request: latestUser, project, catalog, preferFree: true });
     return { ...result, mode };
   }
 
@@ -185,11 +194,11 @@ async function runMultiAgent({ latestUser, prepared, selectedProviders, manualMo
 export async function chatStream(params, onDelta) {
   const { providerId, model, mode = 'normal', messages, temperature = 0.35, maxTokens = 4096, profile = 'coding' } = params;
   validateMessages(messages);
-  if (mode === 'hive' || mode === 'build' || mode === 'debug' || mode === 'multi-agent') {
+  if (mode === 'hive' || mode === 'build' || mode === 'debug' || mode === 'multi-agent' || mode === 'super') {
     return chat(params); // modos multiagente não fazem streaming token a token; usam eventos SSE
   }
   const pool = await resourceCatalog({ configuredOnly: true });
-  const prepared = compactMessages(withSystem(messages, { coding: profile !== 'general', profile }), envInt('MAX_CONTEXT_CHARS', 90000));
+  const prepared = compactMessages(await withSystem(messages, { coding: profile !== 'general', profile }), envInt('MAX_CONTEXT_CHARS', 90000));
   const primary = mode === 'auto'
     ? (await selectDiverse(pool, 1, TASK_PROFILES[classifyNeed(messages.at(-1)?.content)], { preferFree: true }))[0]?.provider
     : await getProvider(providerId || process.env.DEFAULT_PROVIDER || 'nvidia');
